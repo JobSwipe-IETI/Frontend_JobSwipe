@@ -17,4 +17,9 @@ class AppConfig {
     'BACKEND_BASE_URL',
     defaultValue: 'http://10.0.2.2:8080',
   );
+
+  static const bool allowCreateVacancyForAll = bool.fromEnvironment(
+    'ALLOW_CREATE_VACANCY_FOR_ALL',
+    defaultValue: true,
+  );
 }
