@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import '../config/app_config.dart';
 import '../config/theme.dart';
+import '../models/vacancy_model.dart';
+import '../models/user_profile.dart';
+import '../widgets/swipe_cards_stack.dart';
+import '../controllers/swipe_controller.dart';
+import '../controllers/user_provider.dart';
+import '../widgets/candidate_profile_widget.dart';
+import '../widgets/company_profile_widget.dart';
 import 'create_vacancy_screen.dart';
-import 'profile_view_screen.dart';
-import 'vacancy_detail_screen.dart';
-import '../services/secure_token_storage.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.onLogout});
@@ -20,8 +22,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   int _selectedIndex = 0;
   late AnimationController _animationController;
   late PageController _pageController;
-  final SecureTokenStorage _tokenStorage = SecureTokenStorage();
-  bool _canCreateVacancy = false;
+  // Removed: SecureTokenStorage no longer needed
+  late UserProvider _userProvider;
+  bool get _isCompanyAccount => _userProvider.isCompany;
+  bool get _isCandidateAccount => _userProvider.isCandidate;
 
   Future<void> _showLogoutDialog() async {
     final bool? shouldLogout = await showDialog<bool>(
@@ -59,17 +63,48 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
+    // Inicializar UserProvider con perfil mock (en producción vendría del backend)
+    _userProvider = UserProvider(
+      initialUser: UserProfile.mockCandidateProfile(),
+    );
     _pageController = PageController(initialPage: _selectedIndex);
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 400),
       vsync: this,
     );
     _animationController.forward();
+    
+    // Escuchar cambios en el UserProvider para reconstruir cuando cambia el tipo de cuenta
+    _userProvider.addListener(_onUserTypeChanged);
+    
     _loadPermissions();
+  }
+
+  void _onUserTypeChanged() {
+    // Cuando cambia el tipo de usuario, reconstruir el widget para actualizar las tabs
+    if (mounted) {
+      setState(() {
+        // Resetear el índice de página si el nuevo tab no existe
+        if (_selectedIndex >= _getPageCount()) {
+          _selectedIndex = 2; // Ir al perfil
+          // Usar Future.microtask para permitir que el widget se reconstruya primero
+          Future.microtask(() {
+            if (_pageController.hasClients) {
+              _pageController.jumpToPage(_selectedIndex);
+            }
+          });
+        }
+      });
+    }
+  }
+
+  int _getPageCount() {
+    return _isCompanyAccount ? 4 : 3;
   }
 
   @override
   void dispose() {
+    _userProvider.removeListener(_onUserTypeChanged);
     _pageController.dispose();
     _animationController.dispose();
     super.dispose();
@@ -101,12 +136,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 _animationController.forward(from: 0.0);
               });
             },
-            children: [
-              _buildExplore(),
-              _buildMatches(),
-              _buildProfile(),
-              const CreateVacancySection(),
-            ],
+            children: _buildPageViewChildren(),
           ),
         ),
       ),
@@ -114,21 +144,127 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+  List<Widget> _buildPageViewChildren() {
+    final pages = [
+      _buildExplore(),
+      _buildMatches(),
+      _buildProfile(),
+    ];
+    
+    if (_isCompanyAccount) {
+      pages.add(const CreateVacancySection());
+    }
+    
+    return pages;
+  }
+
   Widget _buildExplore() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildHeader('Explora'),
-          const SizedBox(height: 24),
-          _buildSearchBar(),
-          const SizedBox(height: 28),
-          _buildSectionTitle('Empleos recomendados'),
-          const SizedBox(height: 16),
-          ...[1, 2, 3].map((i) => _buildJobCard(i)),
-        ],
+    // Datos de muestra
+    final List<VacancyModel> sampleVacancies = [
+      VacancyModel(
+        id: 1,
+        title: 'Senior Frontend Developer',
+        company: 'Google',
+        location: 'Remoto',
+        salary: '\$120k - \$150k USD',
+        matchPercentage: 92,
+        badge: 'Mockup',
+        description:
+            'Buscamos un Senior Frontend Developer con experiencia en React y TypeScript. Trabajarás en productos que impactan a millones de usuarios.',
+        logo: Icons.business_rounded.toString(),
       ),
+      VacancyModel(
+        id: 2,
+        title: 'Product Manager',
+        company: 'Meta',
+        location: '100% Remoto',
+        salary: '\$130k - \$180k USD',
+        matchPercentage: 88,
+        badge: 'Open',
+        description:
+            'Únete a nuestro equipo de Ingeniería de Meta para construir interfaces de próxima generación usando React y TypeScript. Trabajarás en productos que impactan a millones.',
+        logo: Icons.business_rounded.toString(),
+      ),
+      VacancyModel(
+        id: 3,
+        title: 'Full Stack Engineer',
+        company: 'Amazon',
+        location: 'Remoto',
+        salary: '\$100k - \$140k USD',
+        matchPercentage: 85,
+        badge: 'New',
+        description:
+            'Se requiere experiencia en backend con Node.js/Python y frontend con React. Trabajarás en sistemas distribuidos de alta escala.',
+        logo: Icons.business_rounded.toString(),
+      ),
+      VacancyModel(
+        id: 4,
+        title: 'DevOps Engineer',
+        company: 'Netflix',
+        location: 'Remoto',
+        salary: '\$110k - \$160k USD',
+        matchPercentage: 81,
+        badge: 'Hot',
+        description:
+            'Buscamos un DevOps Engineer experto en Kubernetes, Docker y AWS. Serás responsable de la infraestructura de millones de usuarios.',
+        logo: Icons.business_rounded.toString(),
+      ),
+      VacancyModel(
+        id: 5,
+        title: 'Data Scientist',
+        company: 'OpenAI',
+        location: 'San Francisco, USA',
+        salary: '\$140k - \$200k USD',
+        matchPercentage: 87,
+        badge: 'Premium',
+        description:
+            'Trabaja con modelos de IA de última generación. Necesitamos expertos en machine learning con experiencia en producción.',
+        logo: Icons.business_rounded.toString(),
+      ),
+    ];
+
+    return Column(
+      children: [
+        // Header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader('Explora'),
+            ],
+          ),
+        ),
+        // Card Deck
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 32, 20, 20),
+            child: SwipeCardsStack(
+              vacancies: sampleVacancies,
+              onCardSwiped: (vacancy, result) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      result == SwipeResult.like
+                          ? '❤️ ${vacancy.title} guardado'
+                          : '✋ ${vacancy.title} rechazado',
+                    ),
+                    duration: const Duration(milliseconds: 1200),
+                  ),
+                );
+              },
+              onStackEmpty: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('No hay más vacantes disponibles 🎉'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -151,64 +287,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildProfile() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 80),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildHeader('Perfil'),
-          const SizedBox(height: 24),
-          _buildProfileSection(),
-          const SizedBox(height: 28),
-          _buildProfileMenu(),
-          const SizedBox(height: 32),
-          Container(
-            height: 1,
-            color: Colors.grey.shade200,
-          ),
-          const SizedBox(height: 32),
-          SizedBox(
-            width: double.infinity,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFEF4444).withValues(alpha: 0.2),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ElevatedButton.icon(
-                onPressed: _showLogoutDialog,
-                icon: const Icon(
-                  Icons.logout_rounded,
-                  size: 20,
-                ),
-                label: const Text(
-                  'Cerrar sesión',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFEF4444),
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size.fromHeight(56),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: 0,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    return _isCandidateAccount
+        ? CandidateProfileWidget(
+            userProvider: _userProvider,
+            onLogout: _showLogoutDialog,
+          )
+        : CompanyProfileWidget(
+            userProvider: _userProvider,
+            onLogout: _showLogoutDialog,
+          );
   }
 
   Widget _buildHeader(String title) {
@@ -251,42 +338,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildSearchBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: TextField(
-        decoration: InputDecoration(
-          hintText: 'Buscar empleos...',
-          hintStyle: TextStyle(
-            color: Colors.grey.shade500,
-            fontSize: 14,
-          ),
-          prefixIcon: Icon(
-            Icons.search_rounded,
-            color: Colors.grey.shade600,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(vertical: 14),
-        ),
-      ),
-    );
-  }
-
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
@@ -295,134 +346,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         fontWeight: FontWeight.w700,
         color: Color(0xFF6366F1),
         letterSpacing: 0.2,
-      ),
-    );
-  }
-
-  Widget _buildJobCard(int index) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => VacancyDetailScreen(
-              vacancyId: index,
-              title: 'Senior Developer',
-              company: 'Tech Company Inc.',
-              location: 'Madrid, España',
-              salary: '\$80,000 - \$120,000',
-              matchPercentage: 92.0,
-            ),
-          ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-          boxShadow: [
-            BoxShadow(
-              color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      JobSwipeTheme.primaryIndigo.withValues(alpha: 0.1),
-                      const Color(0xFF1E3A8A).withValues(alpha: 0.1),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.business_rounded,
-                  color: JobSwipeTheme.primaryIndigo,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Senior Developer',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF6366F1),
-                      ),
-                    ),
-                    Text(
-                      'Tech Company Inc.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade600,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '92% match',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: JobSwipeTheme.primaryIndigo,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            spacing: 8,
-            children: [
-              _buildTag('Remoto'),
-              _buildTag('\$80k - \$120k'),
-              _buildTag('Full-time'),
-            ],
-          ),
-        ],
-      ),
-      ),
-    );
-  }
-
-  Widget _buildTag(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.2)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: JobSwipeTheme.primaryIndigo,
-        ),
       ),
     );
   }
@@ -569,181 +492,24 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildProfileSection() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  JobSwipeTheme.primaryIndigo.withValues(alpha: 0.1),
-                  const Color(0xFF1E3A8A).withValues(alpha: 0.1),
-                ],
-              ),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.person_rounded,
-              size: 40,
-              color: JobSwipeTheme.primaryIndigo,
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Usuario JobSwipe',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF6366F1),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'usuario@example.com',
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.grey.shade600,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            spacing: 12,
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0F9FF),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFBFDEF8)),
-                  ),
-                  child: const Column(
-                    children: [
-                      Text(
-                        '4.8',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF6366F1),
-                        ),
-                      ),
-                      Text(
-                        'Rating',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF3C7),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFFDE68A)),
-                  ),
-                  child: const Column(
-                    children: [
-                      Text(
-                        '12',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF92400E),
-                        ),
-                      ),
-                      Text(
-                        'Entrevistas',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF78350F),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProfileMenu() {
-    return Column(
-      spacing: 10,
-      children: [
-        _buildMenuOption(
-          Icons.person_outline_rounded,
-          'Editar Perfil',
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => ProfileViewScreen(onLogout: _showLogoutDialog),
-              ),
-            );
-          },
-        ),
-        _buildMenuOption(Icons.settings_rounded, 'Configuración'),
-        _buildMenuOption(Icons.notifications_none_rounded, 'Notificaciones'),
-        _buildMenuOption(Icons.help_outline_rounded, 'Ayuda'),
-      ],
-    );
-  }
-
-  Widget _buildMenuOption(
-    IconData icon,
-    String label, {
-    VoidCallback? onTap,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: ListTile(
-        leading: Icon(icon, color: JobSwipeTheme.primaryIndigo),
-        title: Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF6366F1),
-          ),
-        ),
-        trailing: Icon(
-          Icons.arrow_forward_rounded,
-          color: Colors.grey.shade400,
-          size: 18,
-        ),
-        onTap: onTap ?? () {},
-      ),
-    );
-  }
-
   Widget _buildBottomNav() {
-    const tabs = ['Explora', 'Matches', 'Perfil', 'Crear Vacante'];
-    const icons = [
-      Icons.explore_rounded,
-      Icons.favorite_rounded,
-      Icons.person_rounded,
-      Icons.post_add_rounded,
-    ];
+    // Construir tabs dinámicamente según el tipo de usuario
+    final tabs = _isCompanyAccount
+        ? const ['Explora', 'Matches', 'Perfil', 'Crear Vacante']
+        : const ['Explora', 'Matches', 'Perfil'];
+    
+    final icons = _isCompanyAccount
+        ? const [
+            Icons.explore_rounded,
+            Icons.favorite_rounded,
+            Icons.person_rounded,
+            Icons.post_add_rounded,
+          ]
+        : const [
+            Icons.explore_rounded,
+            Icons.favorite_rounded,
+            Icons.person_rounded,
+          ];
 
     return Container(
       decoration: BoxDecoration(
@@ -770,7 +536,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 icon: icons[index],
                 label: tabs[index],
                 isSelected: _selectedIndex == index,
-                isEnabled: index != 3 || _canCreateVacancy,
                 onTap: () => _onNavTap(index),
               ),
             ),
@@ -784,20 +549,17 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     required IconData icon,
     required String label,
     required bool isSelected,
-    required bool isEnabled,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
-      onTap: isEnabled ? onTap : _showCreateVacancyLockedMessage,
+      onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         spacing: 4,
         children: [
           Icon(
             icon,
-            color: isEnabled
-                ? (isSelected ? JobSwipeTheme.primaryIndigo : Colors.grey.shade500)
-                : Colors.grey.shade400,
+            color: isSelected ? JobSwipeTheme.primaryIndigo : Colors.grey.shade500,
             size: 24,
           ),
           Text(
@@ -805,12 +567,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: isEnabled
-                  ? (isSelected ? JobSwipeTheme.primaryIndigo : Colors.grey.shade500)
-                  : Colors.grey.shade400,
+              color: isSelected ? JobSwipeTheme.primaryIndigo : Colors.grey.shade500,
             ),
           ),
-          if (isSelected && isEnabled)
+          if (isSelected)
             Container(
               width: 24,
               height: 3,
@@ -819,23 +579,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-          if (!isEnabled)
-            Icon(
-              Icons.lock_rounded,
-              size: 10,
-              color: Colors.grey.shade400,
-            ),
         ],
       ),
     );
   }
 
   void _onNavTap(int index) {
-    if (index == 3 && !_canCreateVacancy) {
-      _showCreateVacancyLockedMessage();
-      return;
-    }
-
     _pageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 250),
@@ -847,44 +596,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Future<void> _loadPermissions() async {
-    final String? token = await _tokenStorage.readToken();
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _canCreateVacancy =
-          AppConfig.allowCreateVacancyForAll || _hasCompanyRole(token);
-    });
-  }
-
-  bool _hasCompanyRole(String? token) {
-    if (token == null || token.isEmpty) {
-      return false;
-    }
-
-    final List<String> parts = token.split('.');
-    if (parts.length != 3) {
-      return false;
-    }
-
-    try {
-      final String normalized = base64Url.normalize(parts[1]);
-      final Map<String, dynamic> payload =
-          jsonDecode(utf8.decode(base64Url.decode(normalized))) as Map<String, dynamic>;
-      final String role = (payload['role'] as String?)?.toUpperCase() ?? '';
-      return role == 'COMPANY';
-    } catch (_) {
-      return false;
-    }
-  }
-
-  void _showCreateVacancyLockedMessage() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Solo usuarios COMPANY pueden crear vacantes.'),
-      ),
-    );
+    // Ya no se necesita cargar permisos especiales
+    // El tipo de usuario se obtiene del UserProvider
   }
 }
 
