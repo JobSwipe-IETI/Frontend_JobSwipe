@@ -19,18 +19,36 @@ class ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final displayName = profile.companyName ?? profile.name;
+    final initials = displayName
+        .trim()
+        .split(' ')
+        .where((word) => word.isNotEmpty)
+        .take(2)
+        .map((word) => word[0])
+        .join()
+        .toUpperCase();
+
     return Stack(
       children: [
-        // Banner
+        // Header gradient/banner
         Container(
           width: double.infinity,
-          height: 160,
+          height: 170,
           decoration: BoxDecoration(
-            color: JobSwipeTheme.primaryIndigo.withOpacity(0.1),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF1A237E), Color(0xFF7C4DFF)],
+            ),
             image: profile.bannerImageUrl.isNotEmpty
                 ? DecorationImage(
                     image: NetworkImage(profile.bannerImageUrl),
                     fit: BoxFit.cover,
+                    colorFilter: ColorFilter.mode(
+                      Colors.black.withValues(alpha: 0.2),
+                      BlendMode.darken,
+                    ),
                   )
                 : null,
             borderRadius: const BorderRadius.only(
@@ -46,7 +64,7 @@ class ProfileHeader extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.3),
+                        color: Colors.black.withValues(alpha: 0.3),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -59,7 +77,34 @@ class ProfileHeader extends StatelessWidget {
                 )
               : null,
         ),
-        // Foto de perfil (superpuesta)
+        Positioned(
+          left: 20,
+          top: 24,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Mi Perfil',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                displayName,
+                style: const TextStyle(
+                  color: Color(0xFFBFDBFE),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Avatar superpuesto
         Positioned(
           bottom: -20,
           left: 20,
@@ -71,10 +116,7 @@ class ProfileHeader extends StatelessWidget {
                   width: 100,
                   height: 100,
                   decoration: BoxDecoration(
-                    border: Border.all(
-                      color: Colors.white,
-                      width: 4,
-                    ),
+                    border: Border.all(color: Colors.white, width: 4),
                     shape: BoxShape.circle,
                     image: profile.profileImageUrl.isNotEmpty
                         ? DecorationImage(
@@ -82,15 +124,20 @@ class ProfileHeader extends StatelessWidget {
                             fit: BoxFit.cover,
                           )
                         : null,
-                    color: JobSwipeTheme.primaryIndigo.withOpacity(0.2),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF1A237E), Color(0xFF7C4DFF)],
+                    ),
                   ),
                   child: profile.profileImageUrl.isEmpty
-                      ? Icon(
-                          profile.userType == UserType.candidate
-                              ? Icons.person_rounded
-                              : Icons.business_rounded,
-                          size: 50,
-                          color: JobSwipeTheme.primaryIndigo,
+                      ? Text(
+                          initials,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w900,
+                          ),
                         )
                       : null,
                 ),
@@ -101,12 +148,9 @@ class ProfileHeader extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: JobSwipeTheme.primaryIndigo,
+                        color: const Color(0xFF1A237E),
                         shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white,
-                          width: 2,
-                        ),
+                        border: Border.all(color: Colors.white, width: 2),
                       ),
                       child: const Icon(
                         Icons.camera_alt_rounded,

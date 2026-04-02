@@ -1,500 +1,385 @@
 import 'package:flutter/material.dart';
+
 import '../controllers/user_provider.dart';
-import '../dialogs/profile_edit_dialog.dart';
-import 'profile_header.dart';
-import 'switch_account_button.dart';
 
-/// Perfil para usuario tipo EMPRESA
 class CompanyProfileWidget extends StatefulWidget {
-  final UserProvider userProvider;
-  final VoidCallback onLogout;
-
   const CompanyProfileWidget({
     super.key,
     required this.userProvider,
     required this.onLogout,
   });
 
+  final UserProvider userProvider;
+  final VoidCallback onLogout;
+
   @override
   State<CompanyProfileWidget> createState() => _CompanyProfileWidgetState();
 }
 
 class _CompanyProfileWidgetState extends State<CompanyProfileWidget> {
+  bool _notificationsOn = true;
   bool _isSwitching = false;
+
+  final List<Map<String, String>> _stats = const [
+    {'label': 'Vistas', 'value': '942'},
+    {'label': 'Vacantes', 'value': '12'},
+    {'label': 'Matches', 'value': '56'},
+    {'label': 'Score IA', 'value': '91%'},
+  ];
+
+  final List<Map<String, String>> _openRoles = const [
+    {
+      'title': 'Senior Flutter Engineer',
+      'subtitle': 'Remoto • Tiempo completo',
+      'meta': '32 candidatos',
+      'color': '7C4DFF',
+    },
+    {
+      'title': 'Backend Java Developer',
+      'subtitle': 'Hibrido • Medellin',
+      'meta': '18 candidatos',
+      'color': '00B4D8',
+    },
+    {
+      'title': 'Product Designer',
+      'subtitle': 'Presencial • Bogota',
+      'meta': '11 candidatos',
+      'color': '1A237E',
+    },
+  ];
+
+  final List<Map<String, String>> _companyData = const [
+    {'label': 'Industria', 'value': 'Software / SaaS'},
+    {'label': 'Tamano', 'value': '120 colaboradores'},
+    {'label': 'Fundacion', 'value': '2017'},
+    {'label': 'Sede', 'value': 'Bogota, Colombia'},
+  ];
+
+  Future<void> _switchToCandidate() async {
+    setState(() => _isSwitching = true);
+    try {
+      await widget.userProvider.switchUserType();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Modo candidato activado')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo cambiar el modo: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => _isSwitching = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final profile = widget.userProvider.currentUser;
+    final displayName = profile.companyName ?? profile.name;
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header del perfil (banner + logo)
-          ProfileHeader(
-            profile: profile,
-            isEditable: true,
-            onEditBanner: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Actualizar banner (mock)')),
-              );
-            },
-            onEditProfile: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Actualizar logo (mock)')),
-              );
-            },
-          ),
-          const SizedBox(height: 60),
-
-          // Información de la empresa
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Nombre de empresa
-                Text(
-                  profile.companyName ?? profile.name,
-                  style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF1F2937),
-                  ),
-                ),
-                const SizedBox(height: 4),
-
-                // Website
-                if (profile.website != null)
-                  Row(
-                    spacing: 6,
-                    children: [
-                      Icon(
-                        Icons.language_rounded,
-                        size: 16,
-                        color: Colors.grey.shade600,
-                      ),
-                      Text(
-                        profile.website!,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: 16),
-
-                // Descripción
-                Text(
-                  'Acerca de nosotros',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.grey.shade700,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  profile.description,
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.6,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Sección de Vacantes publicadas
-                _buildSectionCard(
-                  icon: Icons.work_rounded,
-                  title: 'Vacantes Publicadas',
-                  subtitle: '5 vacantes activas',
-                  backgroundColor: const Color(0xFF6366F1).withOpacity(0.1),
-                  color: const Color(0xFF6366F1),
-                ),
-                const SizedBox(height: 12),
-
-                // Sección de Aplicaciones recibidas
-                _buildSectionCard(
-                  icon: Icons.person_add_rounded,
-                  title: 'Aplicantes',
-                  subtitle: '32 candidatos interesados',
-                  backgroundColor: const Color(0xFF3B82F6).withOpacity(0.1),
-                  color: const Color(0xFF3B82F6),
-                ),
-                const SizedBox(height: 28),
-
-                // Botón de editar perfil
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      final result = await showDialog<Map<String, dynamic>>(
-                        context: context,
-                        builder: (context) => ProfileEditDialog(
-                          profile: profile,
-                        ),
-                      );
-
-                      if (result != null && mounted) {
-                        widget.userProvider.updateProfile(
-                          name: result['name'] ?? profile.name,
-                          description: result['description'] ?? profile.description,
-                          companyName: result['companyName'] ?? profile.companyName,
-                          website: result['website'] ?? profile.website,
-                          profileImageUrl: profile.profileImageUrl,
-                          bannerImageUrl: profile.bannerImageUrl,
-                        );
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('✓ Perfil actualizado'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.edit_rounded),
-                    label: const Text(
-                      'Editar Perfil',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3B82F6),
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size.fromHeight(56),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      elevation: 0,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Botón principal para crear vacante
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      // Mostrar modal de crear vacante
-                      _showCreateJobModal(context);
-                    },
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text(
-                      'Crear Nueva Vacante',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981),
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size.fromHeight(56),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      elevation: 0,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Botón para cambiar a Candidato
-                SwitchAccountTypeButton(
-                  currentUserType: widget.userProvider.userType,
-                  isLoading: _isSwitching,
-                  onSwitch: () async {
-                    setState(() => _isSwitching = true);
-                    try {
-                      await widget.userProvider.switchUserType();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Cuenta cambiada a Candidato'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Error al cambiar cuenta: $e'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    } finally {
-                      if (mounted) {
-                        setState(() => _isSwitching = false);
-                      }
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Botón de cerrar sesión
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: widget.onLogout,
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Cerrar sesión'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFEF4444),
-                      side: const BorderSide(color: Color(0xFFEF4444)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 32),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color backgroundColor,
-    required Color color,
-  }) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: color.withOpacity(0.2),
+      color: const Color(0xFFF5F5F7),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 96),
+        child: Column(
+          children: [
+            _buildTopHeader(displayName, profile.website),
+            Transform.translate(
+              offset: const Offset(0, -28),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  children: [
+                    _buildStatsGrid(),
+                    const SizedBox(height: 12),
+                    _buildRoleSwitcher(),
+                    const SizedBox(height: 12),
+                    _buildCompanyDataCard(profile.email),
+                    const SizedBox(height: 12),
+                    _buildOpenRolesCard(),
+                    const SizedBox(height: 12),
+                    _buildSettingsCard(),
+                    const SizedBox(height: 12),
+                    _buildActionButtons(),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
-      child: Row(
+    );
+  }
+
+  Widget _buildTopHeader(String displayName, String? website) {
+    final initials = displayName
+        .trim()
+        .split(' ')
+        .where((w) => w.isNotEmpty)
+        .take(2)
+        .map((w) => w[0])
+        .join()
+        .toUpperCase();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 52),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1A237E), Color(0xFF7C4DFF)],
+        ),
+      ),
+      child: Column(
         children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: color,
-                  ),
+          Row(
+            children: [
+              const Text(
+                'Mi Perfil',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
+              ),
+              const Spacer(),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ],
-            ),
+                child: const Icon(
+                  Icons.edit_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
+            ],
           ),
-          const Icon(Icons.arrow_forward_rounded, size: 18),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  color: Colors.white.withValues(alpha: 0.22),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    width: 2,
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    initials,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Cuenta Empresa',
+                      style: TextStyle(
+                        color: Color(0xFFBFDBFE),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      website == null || website.isEmpty
+                          ? 'www.jobswipe.co'
+                          : website,
+                      style: const TextStyle(
+                        color: Color(0xFF93C5FD),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  /// Muestra modal para crear nueva vacante
-  void _showCreateJobModal(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+  Widget _buildStatsGrid() {
+    return GridView.builder(
+      itemCount: _stats.length,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        childAspectRatio: 0.92,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
       ),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.8,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          builder: (context, scrollController) {
-            return CreateJobFormWidget(
-              scrollController: scrollController,
-            );
-          },
+      itemBuilder: (context, index) {
+        final stat = _stats[index];
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0F000000),
+                blurRadius: 12,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                stat['value']!,
+                style: const TextStyle(
+                  color: Color(0xFF263238),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                stat['label']!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+              ),
+            ],
+          ),
         );
       },
     );
   }
-}
 
-/// Widget para crear una nueva vacante
-class CreateJobFormWidget extends StatefulWidget {
-  final ScrollController scrollController;
-
-  const CreateJobFormWidget({
-    super.key,
-    required this.scrollController,
-  });
-
-  @override
-  State<CreateJobFormWidget> createState() => _CreateJobFormWidgetState();
-}
-
-class _CreateJobFormWidgetState extends State<CreateJobFormWidget> {
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _salaryController = TextEditingController();
-  final _locationController = TextEditingController();
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _descriptionController.dispose();
-    _salaryController.dispose();
-    _locationController.dispose();
-    super.dispose();
+  Widget _buildRoleSwitcher() {
+    return _card(
+      border: Border.all(color: const Color(0xFF7C4DFF), width: 2),
+      child: Column(
+        children: [
+          Row(
+            children: const [
+              Icon(
+                Icons.swap_horiz_rounded,
+                color: Color(0xFF7C4DFF),
+                size: 18,
+              ),
+              SizedBox(width: 10),
+              Text(
+                'Modo de cuenta',
+                style: TextStyle(
+                  color: Color(0xFF263238),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFF1F5F9)),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _modeButton(
+                      label: 'Candidato',
+                      icon: Icons.person_rounded,
+                      active: false,
+                      onPressed: _isSwitching ? null : _switchToCandidate,
+                    ),
+                  ),
+                  Expanded(
+                    child: _modeButton(
+                      label: 'Empresa',
+                      icon: Icons.business_rounded,
+                      active: true,
+                      onPressed: null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Modo empresa activo',
+            style: TextStyle(
+              color: Color(0xFF7C4DFF),
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: SingleChildScrollView(
-        controller: widget.scrollController,
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _modeButton({
+    required String label,
+    required IconData icon,
+    required bool active,
+    required VoidCallback? onPressed,
+  }) {
+    final bg = active ? const Color(0xFF7C4DFF) : Colors.white;
+    final fg = active ? Colors.white : const Color(0xFF666666);
+
+    return Material(
+      color: bg,
+      child: InkWell(
+        onTap: onPressed,
+        child: SizedBox(
+          height: 44,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Drag handle
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Título
-              const Text(
-                'Crear Nueva Vacante',
+              if (!active && _isSwitching)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(icon, size: 14, color: fg),
+              const SizedBox(width: 6),
+              Text(
+                label,
                 style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF1F2937),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: fg,
                 ),
-              ),
-              const SizedBox(height: 24),
-
-              // Campo: Título del puesto
-              _buildTextField(
-                label: 'Título del Puesto',
-                controller: _titleController,
-                hint: 'ej: Ingeniero Flutter Senior',
-              ),
-              const SizedBox(height: 16),
-
-              // Campo: Descripción
-              _buildTextField(
-                label: 'Descripción',
-                controller: _descriptionController,
-                hint: 'Describe el rol y responsabilidades',
-                maxLines: 4,
-              ),
-              const SizedBox(height: 16),
-
-              // Campo: Salario
-              _buildTextField(
-                label: 'Rango Salarial',
-                controller: _salaryController,
-                hint: r'ej: $80k - $120k USD',
-              ),
-              const SizedBox(height: 16),
-
-              // Campo: Ubicación
-              _buildTextField(
-                label: 'Ubicación',
-                controller: _locationController,
-                hint: 'ej: Remoto, Medellín, etc',
-              ),
-              const SizedBox(height: 28),
-
-              // Botón Publicar
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    // TODO: Implementar envío del formulario
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('✅ Vacante publicada correctamente'),
-                      ),
-                    );
-                    Navigator.pop(context);
-                  },
-                  icon: const Icon(Icons.publish_rounded),
-                  label: const Text(
-                    'Publicar Vacante',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(56),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Botón Cancelar
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(56),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: const Text(
-                    'Cancelar',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(
-                height: MediaQuery.of(context).viewInsets.bottom + 20,
               ),
             ],
           ),
@@ -503,52 +388,320 @@ class _CreateJobFormWidgetState extends State<CreateJobFormWidget> {
     );
   }
 
-  Widget _buildTextField({
-    required String label,
-    required TextEditingController controller,
-    required String hint,
-    int maxLines = 1,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF1F2937),
+  Widget _buildCompanyDataCard(String email) {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Informacion de empresa',
+            style: TextStyle(
+              color: Color(0xFF263238),
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          maxLines: maxLines,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey.shade400),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Color(0xFF6366F1),
-                width: 2,
+          const SizedBox(height: 12),
+          ..._companyData.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 9),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 4,
+                    child: Text(
+                      item['label']!,
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 6,
+                    child: Text(
+                      item['value']!,
+                      style: const TextStyle(
+                        color: Color(0xFF263238),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
+          ),
+          const Divider(height: 18, color: Color(0xFFE5E7EB)),
+          Row(
+            children: [
+              const Icon(
+                Icons.mail_rounded,
+                size: 14,
+                color: Color(0xFF7C4DFF),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                email,
+                style: const TextStyle(
+                  color: Color(0xFF64748B),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOpenRolesCard() {
+    return _card(
+      child: Column(
+        children: [
+          Row(
+            children: const [
+              Icon(
+                Icons.work_outline_rounded,
+                size: 16,
+                color: Color(0xFF1A237E),
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Vacantes activas',
+                style: TextStyle(
+                  color: Color(0xFF263238),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+              Spacer(),
+              Icon(Icons.add_rounded, color: Color(0xFF7C4DFF), size: 18),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ..._openRoles.map((role) {
+            final color = Color(int.parse('0xFF${role['color']!}'));
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.work_rounded, size: 14, color: color),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          role['title']!,
+                          style: const TextStyle(
+                            color: Color(0xFF263238),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        Text(
+                          role['subtitle']!,
+                          style: const TextStyle(
+                            color: Color(0xFF6B7280),
+                            fontSize: 12,
+                          ),
+                        ),
+                        Text(
+                          role['meta']!,
+                          style: const TextStyle(
+                            color: Color(0xFF9CA3AF),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsCard() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0F000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'CONFIGURACION',
+              style: TextStyle(
+                color: Color(0xFF9CA3AF),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.8,
+              ),
+            ),
+          ),
+          _settingRow(
+            icon: Icons.notifications_rounded,
+            label: 'Notificaciones',
+            trailing: Switch.adaptive(
+              value: _notificationsOn,
+              onChanged: (v) => setState(() => _notificationsOn = v),
+              activeColor: const Color(0xFF1A237E),
+            ),
+          ),
+          _settingRow(icon: Icons.lock_rounded, label: 'Privacidad'),
+          _settingRow(
+            icon: Icons.language_rounded,
+            label: 'Idioma',
+            value: 'Espanol',
+          ),
+          _settingRow(
+            icon: Icons.help_center_rounded,
+            label: 'Ayuda y soporte',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _settingRow({
+    required IconData icon,
+    required String label,
+    Widget? trailing,
+    String? value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Color(0xFFF5F5F7))),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F5F7),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 16, color: const Color(0xFF1A237E)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: Color(0xFF263238), fontSize: 13),
+            ),
+          ),
+          if (trailing != null)
+            trailing
+          else if (value != null)
+            Text(
+              value,
+              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+            )
+          else
+            const Icon(Icons.chevron_right_rounded, color: Color(0xFFD1D5DB)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Crear vacante (proximamente)')),
+              );
+            },
+            icon: const Icon(Icons.add_rounded),
+            label: const Text(
+              'Crear nueva vacante',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            style: ElevatedButton.styleFrom(
+              elevation: 0,
+              backgroundColor: const Color(0xFFECFDF5),
+              foregroundColor: const Color(0xFF059669),
+              minimumSize: const Size.fromHeight(54),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: widget.onLogout,
+            icon: const Icon(Icons.logout_rounded),
+            label: const Text(
+              'Cerrar sesion',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            style: ElevatedButton.styleFrom(
+              elevation: 0,
+              backgroundColor: const Color(0xFFFFF5F5),
+              foregroundColor: const Color(0xFFD32F2F),
+              minimumSize: const Size.fromHeight(54),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _card({required Widget child, Border? border}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: border,
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0F000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 }

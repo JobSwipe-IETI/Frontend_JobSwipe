@@ -50,45 +50,48 @@ class _SwitchAccountTypeButtonState extends State<SwitchAccountTypeButton>
   Widget build(BuildContext context) {
     final isCandidate = widget.currentUserType == UserType.candidate;
     final nextType = isCandidate ? 'Empresa' : 'Candidato';
-    final nextIcon = isCandidate ? Icons.business_rounded : Icons.person_rounded;
-    final nextColor = isCandidate ? const Color(0xFF10B981) : const Color(0xFF3B82F6);
+    final nextIcon = isCandidate
+        ? Icons.business_rounded
+        : Icons.person_rounded;
+    final nextColor = isCandidate
+        ? const Color(0xFF7C4DFF)
+        : const Color(0xFF1A237E);
 
-    return SizedBox(
+    return Container(
       width: double.infinity,
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE8EAF6)),
+      ),
       child: ElevatedButton.icon(
         onPressed: widget.isLoading ? null : _handleSwitch,
         icon: widget.isLoading
-            ? SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    nextColor.withOpacity(0.6),
-                  ),
-                ),
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
               )
             : RotationTransition(
-                turns: Tween(begin: 0.0, end: 1.0)
-                    .animate(_animationController),
-                child: Icon(nextIcon),
+                turns: Tween(
+                  begin: 0.0,
+                  end: 1.0,
+                ).animate(_animationController),
+                child: Icon(nextIcon, size: 16),
               ),
         label: Text(
-          'Cambiar a ${nextType}',
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.5,
-          ),
+          'Cambiar a $nextType',
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: nextColor,
           foregroundColor: Colors.white,
-          minimumSize: const Size.fromHeight(56),
+          minimumSize: const Size.fromHeight(44),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(10),
           ),
-          disabledBackgroundColor: nextColor.withOpacity(0.6),
+          disabledBackgroundColor: nextColor.withValues(alpha: 0.6),
           elevation: 0,
         ),
       ),

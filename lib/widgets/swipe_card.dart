@@ -97,10 +97,14 @@ class SwipeCard extends StatelessWidget {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF10B981).withOpacity(0.15),
+                            color: const Color(
+                              0xFF7C4DFF,
+                            ).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: const Color(0xFF10B981).withOpacity(0.3),
+                              color: const Color(
+                                0xFF7C4DFF,
+                              ).withValues(alpha: 0.25),
                             ),
                           ),
                           child: Text(
@@ -108,7 +112,7 @@ class SwipeCard extends StatelessWidget {
                             style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF10B981),
+                              color: Color(0xFF7C4DFF),
                             ),
                           ),
                         ),
@@ -139,10 +143,7 @@ class SwipeCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Container(
-                      height: 1,
-                      color: Colors.grey.shade200,
-                    ),
+                    Container(height: 1, color: Colors.grey.shade200),
                     const SizedBox(height: 16),
 
                     // Descripción
@@ -314,7 +315,9 @@ class SwipeCard extends StatelessWidget {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF06B6D4).withOpacity(0.15),
+                                color: const Color(
+                                  0xFF06B6D4,
+                                ).withOpacity(0.15),
                                 blurRadius: 10,
                                 offset: const Offset(0, 3),
                               ),
@@ -336,14 +339,13 @@ class SwipeCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: const LinearGradient(
-                              colors: [
-                                Color(0xFF10B981),
-                                Color(0xFF059669),
-                              ],
+                              colors: [Color(0xFF1A237E), Color(0xFF7C4DFF)],
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF10B981).withOpacity(0.4),
+                                color: const Color(
+                                  0xFF7C4DFF,
+                                ).withValues(alpha: 0.35),
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
                               ),
@@ -378,9 +380,7 @@ class SwipeCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: color.withOpacity(0.3),
-        ),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -407,9 +407,7 @@ class SwipeCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF6366F1).withOpacity(0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: const Color(0xFF6366F1).withOpacity(0.25),
-        ),
+        border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.25)),
       ),
       child: Text(
         text,

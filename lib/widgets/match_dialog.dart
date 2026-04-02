@@ -56,17 +56,12 @@ class _MatchDialogState extends State<MatchDialog>
       builder: (context, child) {
         return Opacity(
           opacity: _fadeAnimation.value,
-          child: Transform.scale(
-            scale: _scaleAnimation.value,
-            child: child,
-          ),
+          child: Transform.scale(scale: _scaleAnimation.value, child: child),
         );
       },
       child: Dialog(
         insetPadding: const EdgeInsets.all(20),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(32),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
         backgroundColor: Colors.white,
         child: SingleChildScrollView(
           child: Padding(
@@ -81,14 +76,11 @@ class _MatchDialogState extends State<MatchDialog>
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFF10B981),
-                        Color(0xFF059669),
-                      ],
+                      colors: [Color(0xFF1A237E), Color(0xFF7C4DFF)],
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF10B981).withOpacity(0.4),
+                        color: const Color(0xFF7C4DFF).withValues(alpha: 0.35),
                         blurRadius: 30,
                         offset: const Offset(0, 10),
                       ),
@@ -198,7 +190,7 @@ class _MatchDialogState extends State<MatchDialog>
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4F46E5),
+                      backgroundColor: const Color(0xFF1A237E),
                       foregroundColor: Colors.white,
                       minimumSize: const Size.fromHeight(56),
                       shape: RoundedRectangleBorder(
@@ -219,8 +211,8 @@ class _MatchDialogState extends State<MatchDialog>
                       widget.onContinueExploring?.call();
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE0E7FF),
-                      foregroundColor: const Color(0xFF4F46E5),
+                      backgroundColor: const Color(0xFFF0EEFF),
+                      foregroundColor: const Color(0xFF7C4DFF),
                       minimumSize: const Size.fromHeight(56),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),

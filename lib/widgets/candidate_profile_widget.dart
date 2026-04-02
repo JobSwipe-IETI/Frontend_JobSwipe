@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
+
 import '../controllers/user_provider.dart';
-import '../config/theme.dart';
-import 'switch_account_button.dart';
 
-/// Perfil para usuario tipo CANDIDATO
 class CandidateProfileWidget extends StatefulWidget {
-  final UserProvider userProvider;
-  final VoidCallback onLogout;
-
   const CandidateProfileWidget({
     super.key,
     required this.userProvider,
     required this.onLogout,
   });
+
+  final UserProvider userProvider;
+  final VoidCallback onLogout;
 
   @override
   State<CandidateProfileWidget> createState() => _CandidateProfileWidgetState();
@@ -20,460 +18,870 @@ class CandidateProfileWidget extends StatefulWidget {
 
 class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
   bool _isSwitching = false;
+  bool _notificationsOn = true;
+  bool _editSkills = false;
+
+  static const List<String> _defaultSkills = [
+    'React',
+    'TypeScript',
+    'Node.js',
+    'GraphQL',
+    'CSS/Tailwind',
+    'Figma',
+    'Docker',
+    'Git',
+    'AWS',
+    'Python',
+  ];
+
+  final List<Map<String, String>> _experiences = const [
+    {
+      'title': 'Senior Developer',
+      'company': 'StartupCo',
+      'period': '2022 - Presente',
+      'color': '7C4DFF',
+    },
+    {
+      'title': 'Frontend Developer',
+      'company': 'TechAgency',
+      'period': '2020 - 2022',
+      'color': '00B4D8',
+    },
+    {
+      'title': 'Junior Developer',
+      'company': 'WebStudio',
+      'period': '2018 - 2020',
+      'color': '1A237E',
+    },
+  ];
+
+  final List<Map<String, String>> _education = const [
+    {
+      'degree': 'Ing. en Sistemas',
+      'school': 'Universidad Nacional',
+      'period': '2014 - 2018',
+    },
+    {
+      'degree': 'Bootcamp FullStack',
+      'school': 'Platzi Master',
+      'period': '2019',
+    },
+  ];
+
+  final List<Map<String, String>> _stats = const [
+    {'label': 'Vistas', 'value': '148'},
+    {'label': 'Postulaciones', 'value': '23'},
+    {'label': 'Matches', 'value': '8'},
+    {'label': 'Score IA', 'value': '88%'},
+  ];
+
+  late final List<String> _userSkills = List<String>.from(_defaultSkills);
 
   Future<void> _handleSwitchAccount() async {
     setState(() => _isSwitching = true);
     try {
       await widget.userProvider.switchUserType();
-      if (mounted) {
-        // ignore: use_build_context_synchronously
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cuenta cambiada a Empresa'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Modo empresa activado')));
     } catch (e) {
-      if (mounted) {
-        // ignore: use_build_context_synchronously
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo cambiar el modo: $e')));
     } finally {
       if (mounted) {
         setState(() => _isSwitching = false);
       }
     }
   }
+
+  void _removeSkill(String skill) {
+    setState(() {
+      _userSkills.remove(skill);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final profile = widget.userProvider.currentUser;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 80),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Tarjeta de perfil (nombre + foto)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.1),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                // Avatar
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    gradient: JobSwipeTheme.primaryGradient,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: const Icon(
-                    Icons.person_rounded,
-                    size: 42,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                // Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        profile.name,
-                        style: const TextStyle(
-                          fontSize: 19,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        profile.location ?? 'Sin ubicación',
-                        style: const TextStyle(
-                          color: Color(0xFF64748B),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 22),
-
-          // Selector de Modo de Cuenta
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.shade200,
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.switch_account_rounded,
-                        color: JobSwipeTheme.primaryIndigo,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Modo de cuenta',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1F2937),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Row(
+    return Container(
+      color: const Color(0xFFF5F5F7),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 96),
+        child: Column(
+          children: [
+            _buildTopHeader(profile),
+            Transform.translate(
+              offset: const Offset(0, -28),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
                   children: [
-                    Expanded(
-                      child: _buildModeButton('Candidato', true),
+                    _buildProfileCompleteness(),
+                    const SizedBox(height: 12),
+                    _buildStatsGrid(),
+                    const SizedBox(height: 12),
+                    _buildRoleSwitcher(),
+                    const SizedBox(height: 12),
+                    _buildSkillsCard(),
+                    const SizedBox(height: 12),
+                    _buildExperienceCard(),
+                    const SizedBox(height: 12),
+                    _buildEducationCard(),
+                    const SizedBox(height: 12),
+                    _buildSettingsCard(),
+                    const SizedBox(height: 12),
+                    _buildLogoutButton(),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopHeader(dynamic profile) {
+    final initials = profile.name.isNotEmpty
+        ? profile.name
+              .trim()
+              .split(' ')
+              .take(2)
+              .map((word) => word.isNotEmpty ? word[0] : '')
+              .join()
+              .toUpperCase()
+        : 'CG';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 52),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1A237E), Color(0xFF7C4DFF)],
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Mi Perfil',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.edit_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  color: Colors.white.withValues(alpha: 0.22),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    width: 2,
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    initials,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildModeButton('Empresa', false),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      profile.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Senior Frontend Developer',
+                      style: TextStyle(
+                        color: Color(0xFFBFDBFE),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      '📍 ${profile.location ?? 'Bogotá, Colombia'}',
+                      style: const TextStyle(
+                        color: Color(0xFF93C5FD),
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Sección de Habilidades
-          _buildSection(
-            title: 'Habilidades',
-            onEdit: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Editar habilidades')),
-              );
-            },
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                'React',
-                'TypeScript',
-                'Node.js',
-                'GraphQL',
-                'CSS/Tailwind',
-                'Figma',
-                'Docker',
-                'Git',
-                'AWS',
-                'Python',
-              ]
-                  .map((skill) => Chip(
-                        label: Text(skill),
-                        backgroundColor: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.1),
-                        labelStyle: const TextStyle(
-                          color: Color(0xFF6366F1),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ))
-                  .toList(),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Sección de Experiencia
-          _buildSection(
-            title: 'Experiencia',
-            onEdit: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Editar experiencia')),
-              );
-            },
-            child: Column(
-              children: [
-                _buildExperienceItem(
-                  'Senior Developer',
-                  'StartupCo',
-                  '2022 – Presente',
-                ),
-                const SizedBox(height: 12),
-                _buildExperienceItem(
-                  'Frontend Developer',
-                  'TechAgency',
-                  '2020 – 2022',
-                ),
-                const SizedBox(height: 12),
-                _buildExperienceItem(
-                  'Junior Developer',
-                  'WebStudio',
-                  '2018 – 2020',
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Sección de Educación
-          _buildSection(
-            title: 'Educación',
-            onEdit: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Editar educación')),
-              );
-            },
-            child: Column(
-              children: [
-                _buildEducationItem(
-                  'Ing. en Sistemas',
-                  'Universidad Nacional',
-                  '2014 – 2018',
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 28),
-
-          // Botón para cambiar a Empresa
-          SwitchAccountTypeButton(
-            currentUserType: widget.userProvider.userType,
-            isLoading: _isSwitching,
-            onSwitch: _handleSwitchAccount,
-          ),
-          const SizedBox(height: 16),
-
-          // Botón de cerrar sesión
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: widget.onLogout,
-              icon: const Icon(Icons.logout_rounded),
-              label: const Text('Cerrar sesión'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFFEF4444),
-                side: const BorderSide(color: Color(0xFFEF4444)),
-                padding: const EdgeInsets.symmetric(vertical: 14),
               ),
-            ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildModeButton(String text, bool isSelected) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFF6366F1) : Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            text == 'Candidato' ? Icons.person_rounded : Icons.business_rounded,
-            color: isSelected ? Colors.white : Colors.grey.shade600,
-            size: 18,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: isSelected ? Colors.white : Colors.grey.shade600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSection({
-    required String title,
-    required VoidCallback onEdit,
-    required Widget child,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.shade200,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
+  Widget _buildProfileCompleteness() {
+    return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
+            children: const [
               Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
+                'Completitud del perfil',
+                style: TextStyle(
+                  color: Color(0xFF263238),
+                  fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1F2937),
                 ),
               ),
-              GestureDetector(
-                onTap: onEdit,
-                child: const Text(
-                  'Editar',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF6366F1),
-                  ),
+              Spacer(),
+              Text(
+                '78%',
+                style: TextStyle(
+                  color: Color(0xFF7C4DFF),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            height: 10,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: 0.78),
+                duration: const Duration(milliseconds: 950),
+                builder: (context, value, _) {
+                  return Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: value,
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF7C4DFF), Color(0xFF00B4D8)],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Agrega tu experiencia laboral para llegar al 100%',
+            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsGrid() {
+    return GridView.builder(
+      itemCount: _stats.length,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        childAspectRatio: 0.92,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemBuilder: (context, index) {
+        final stat = _stats[index];
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0F000000),
+                blurRadius: 12,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                stat['value']!,
+                style: const TextStyle(
+                  color: Color(0xFF263238),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                stat['label']!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRoleSwitcher() {
+    return _card(
+      border: Border.all(color: const Color(0xFFE8EAF6), width: 2),
+      child: Column(
+        children: [
+          Row(
+            children: const [
+              Icon(
+                Icons.swap_horiz_rounded,
+                color: Color(0xFF7C4DFF),
+                size: 18,
+              ),
+              SizedBox(width: 10),
+              Text(
+                'Modo de cuenta',
+                style: TextStyle(
+                  color: Color(0xFF263238),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          child,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFF1F5F9)),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _modeButton(
+                      label: 'Candidato',
+                      icon: Icons.person_rounded,
+                      active: true,
+                      onPressed: null,
+                    ),
+                  ),
+                  Expanded(
+                    child: _modeButton(
+                      label: 'Empresa',
+                      icon: Icons.business_rounded,
+                      active: false,
+                      onPressed: _isSwitching ? null : _handleSwitchAccount,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildExperienceItem(String title, String company, String dates) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Icon(
-            Icons.business_rounded,
-            color: Color(0xFF6366F1),
-            size: 20,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _modeButton({
+    required String label,
+    required IconData icon,
+    required bool active,
+    required VoidCallback? onPressed,
+  }) {
+    final bg = active ? const Color(0xFF1A237E) : Colors.white;
+    final fg = active ? Colors.white : const Color(0xFF666666);
+
+    return Material(
+      color: bg,
+      child: InkWell(
+        onTap: onPressed,
+        child: SizedBox(
+          height: 44,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              if (!active && _isSwitching)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(icon, size: 14, color: fg),
+              const SizedBox(width: 6),
               Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1F2937),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                company,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF64748B),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                dates,
+                label,
                 style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade500,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: fg,
                 ),
               ),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildEducationItem(String title, String institution, String dates) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Icon(
-            Icons.school_rounded,
-            color: Color(0xFF3B82F6),
-            size: 20,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildSkillsCard() {
+    return _card(
+      child: Column(
+        children: [
+          Row(
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1F2937),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                institution,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF64748B),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                dates,
+              const Text(
+                'Habilidades',
                 style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade500,
+                  color: Color(0xFF263238),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
                 ),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () => setState(() => _editSkills = !_editSkills),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF7C4DFF),
+                ),
+                child: Text(_editSkills ? 'Listo' : 'Editar'),
               ),
             ],
           ),
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                ..._userSkills.map((skill) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0EEFF),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          skill,
+                          style: const TextStyle(
+                            color: Color(0xFF7C4DFF),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (_editSkills)
+                          GestureDetector(
+                            onTap: () => _removeSkill(skill),
+                            child: const Padding(
+                              padding: EdgeInsets.only(left: 6),
+                              child: Text(
+                                '×',
+                                style: TextStyle(
+                                  color: Color(0xFF7C4DFF),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                }),
+                if (_editSkills)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: const Color(0xFF7C4DFF),
+                        width: 1.5,
+                      ),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.add_rounded,
+                          size: 13,
+                          color: Color(0xFF7C4DFF),
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          'Agregar',
+                          style: TextStyle(
+                            color: Color(0xFF7C4DFF),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExperienceCard() {
+    return _card(
+      child: Column(
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.work_rounded, size: 16, color: Color(0xFF1A237E)),
+              SizedBox(width: 8),
+              Text(
+                'Experiencia',
+                style: TextStyle(
+                  color: Color(0xFF263238),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+              Spacer(),
+              Icon(Icons.add_rounded, color: Color(0xFF7C4DFF), size: 18),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ..._experiences.map(_experienceTile),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEducationCard() {
+    return _card(
+      child: Column(
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.school_rounded, size: 16, color: Color(0xFF1A237E)),
+              SizedBox(width: 8),
+              Text(
+                'Educación',
+                style: TextStyle(
+                  color: Color(0xFF263238),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+              Spacer(),
+              Icon(Icons.add_rounded, color: Color(0xFF7C4DFF), size: 18),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ..._education.map(_educationTile),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsCard() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0F000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'CONFIGURACION',
+              style: TextStyle(
+                color: Color(0xFF9CA3AF),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.8,
+              ),
+            ),
+          ),
+          _settingRow(
+            icon: Icons.notifications_rounded,
+            label: 'Notificaciones',
+            trailing: Switch.adaptive(
+              value: _notificationsOn,
+              onChanged: (v) => setState(() => _notificationsOn = v),
+              activeColor: const Color(0xFF1A237E),
+            ),
+          ),
+          _settingRow(icon: Icons.lock_rounded, label: 'Privacidad'),
+          _settingRow(
+            icon: Icons.language_rounded,
+            label: 'Idioma',
+            value: 'Espanol',
+          ),
+          _settingRow(
+            icon: Icons.help_center_rounded,
+            label: 'Ayuda y soporte',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _settingRow({
+    required IconData icon,
+    required String label,
+    Widget? trailing,
+    String? value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Color(0xFFF5F5F7))),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F5F7),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 16, color: const Color(0xFF1A237E)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: Color(0xFF263238), fontSize: 13),
+            ),
+          ),
+          if (trailing != null)
+            trailing
+          else if (value != null)
+            Text(
+              value,
+              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+            )
+          else
+            const Icon(Icons.chevron_right_rounded, color: Color(0xFFD1D5DB)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLogoutButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: widget.onLogout,
+        icon: const Icon(Icons.logout_rounded),
+        label: const Text(
+          'Cerrar sesion',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         ),
-      ],
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: const Color(0xFFFFF5F5),
+          foregroundColor: const Color(0xFFD32F2F),
+          minimumSize: const Size.fromHeight(54),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _experienceTile(Map<String, String> exp) {
+    final color = Color(int.parse('0xFF${exp['color']!}'));
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.work_rounded, size: 14, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  exp['title']!,
+                  style: const TextStyle(
+                    color: Color(0xFF263238),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                Text(
+                  exp['company']!,
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 12,
+                  ),
+                ),
+                Text(
+                  exp['period']!,
+                  style: const TextStyle(
+                    color: Color(0xFF9CA3AF),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _educationTile(Map<String, String> edu) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE3F2FD),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.school_rounded,
+              size: 14,
+              color: Color(0xFF1565C0),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  edu['degree']!,
+                  style: const TextStyle(
+                    color: Color(0xFF263238),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                Text(
+                  edu['school']!,
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 12,
+                  ),
+                ),
+                Text(
+                  edu['period']!,
+                  style: const TextStyle(
+                    color: Color(0xFF9CA3AF),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _card({required Widget child, Border? border}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: border,
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0F000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 }
