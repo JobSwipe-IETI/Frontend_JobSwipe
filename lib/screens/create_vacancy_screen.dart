@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
-import 'dart:typed_data';
+import 'package:flutter/services.dart';
 
 import '../config/theme.dart';
 import '../services/vacancy_service.dart';
@@ -16,71 +15,64 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final VacancyService _vacancyService = VacancyService();
 
-  final TextEditingController _positionController = TextEditingController();
-  final TextEditingController _vacancySummaryController = TextEditingController();
-  final TextEditingController _desiredSalaryController = TextEditingController();
-  final TextEditingController _applicationDateController = TextEditingController();
-  final TextEditingController _fullNameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _addressController = TextEditingController();
-  final TextEditingController _birthDateController = TextEditingController();
-  final TextEditingController _officialIdController = TextEditingController();
-  final TextEditingController _otherDocumentsController = TextEditingController();
-  final TextEditingController _academicLevelController = TextEditingController();
-  final TextEditingController _institutionDetailsController = TextEditingController();
-  final TextEditingController _previousEmploymentController = TextEditingController();
-  final TextEditingController _responsibilitiesController = TextEditingController();
-  final TextEditingController _salaryHistoryController = TextEditingController();
-  final TextEditingController _languagesController = TextEditingController();
-  final TextEditingController _officeFunctionsController = TextEditingController();
-  final TextEditingController _softwareController = TextEditingController();
-  final TextEditingController _softSkillsController = TextEditingController();
-  final TextEditingController _referencesController = TextEditingController();
-  final TextEditingController _referencesContactController = TextEditingController();
-  final TextEditingController _openQuestionsController = TextEditingController();
-  final TextEditingController _killerQuestionsController = TextEditingController();
-  final TextEditingController _attachmentsController = TextEditingController();
-  final TextEditingController _habitsGoalsController = TextEditingController();
+  // -- Text controllers --
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _locationController = TextEditingController();
+  final TextEditingController _minSalaryController = TextEditingController();
+  final TextEditingController _maxSalaryController = TextEditingController();
+
+  // -- Dropdowns --
+  String? _modality;
+  String? _employmentType;
+  String? _experienceLevel;
+
+  // -- Tag lists --
+  List<String> _technologies = [];
+  List<String> _softSkills = [];
+  List<String> _benefits = [];
+
+  // -- Dynamic lists --
+  List<String> _responsibilities = [''];
+  List<String> _technicalRequirements = [''];
 
   bool _isSubmitting = false;
-  PlatformFile? _selectedAttachment;
+
+  static const Map<String, String> _modalityOptions = {
+    'REMOTE': 'Remoto',
+    'HYBRID': 'Híbrido',
+    'ON_SITE': 'Presencial',
+  };
+
+  static const Map<String, String> _employmentOptions = {
+    'FULL_TIME': 'Tiempo completo',
+    'PART_TIME': 'Medio tiempo',
+    'FREELANCE': 'Freelance',
+    'INTERNSHIP': 'Prácticas',
+  };
+
+  static const Map<String, String> _experienceOptions = {
+    'JUNIOR': 'Junior',
+    'SEMI_SENIOR': 'Semi-Senior',
+    'SENIOR': 'Senior',
+  };
 
   @override
   void dispose() {
-    _positionController.dispose();
-    _vacancySummaryController.dispose();
-    _desiredSalaryController.dispose();
-    _applicationDateController.dispose();
-    _fullNameController.dispose();
-    _phoneController.dispose();
-    _emailController.dispose();
-    _addressController.dispose();
-    _birthDateController.dispose();
-    _officialIdController.dispose();
-    _otherDocumentsController.dispose();
-    _academicLevelController.dispose();
-    _institutionDetailsController.dispose();
-    _previousEmploymentController.dispose();
-    _responsibilitiesController.dispose();
-    _salaryHistoryController.dispose();
-    _languagesController.dispose();
-    _officeFunctionsController.dispose();
-    _softwareController.dispose();
-    _softSkillsController.dispose();
-    _referencesController.dispose();
-    _referencesContactController.dispose();
-    _openQuestionsController.dispose();
-    _killerQuestionsController.dispose();
-    _attachmentsController.dispose();
-    _habitsGoalsController.dispose();
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _locationController.dispose();
+    _minSalaryController.dispose();
+    _maxSalaryController.dispose();
     super.dispose();
   }
+
+  // ───────────────────────────── BUILD ─────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
       child: Form(
         key: _formKey,
         child: Column(
@@ -88,238 +80,164 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
           children: [
             _buildHeader(),
             const SizedBox(height: 24),
-            _buildSectionCard(
-              title: '1. Encabezado e Informacion de la Vacante',
+            _buildSection(
+              icon: Icons.work_outline_rounded,
+              title: 'Información General',
               children: [
-                _buildField(
-                  controller: _positionController,
-                  label: 'Puesto solicitado',
-                  hint: 'Ej. Backend Developer Senior',
+                _buildTextField(
+                  controller: _titleController,
+                  label: 'Título del cargo',
+                  hint: 'Ej: Desarrollador Backend Java Senior',
+                  icon: Icons.badge_outlined,
                 ),
-                _buildField(
-                  controller: _desiredSalaryController,
-                  label: 'Sueldo mensual deseado',
-                  hint: 'Ej. 12000',
-                  keyboardType: TextInputType.number,
-                  validator: _salaryValidator,
+                _buildTextField(
+                  controller: _descriptionController,
+                  label: 'Descripción del puesto',
+                  hint: 'Describe el rol, objetivos y contexto del equipo...',
+                  icon: Icons.description_outlined,
+                  maxLines: 4,
                 ),
-                _buildDateField(
-                  controller: _applicationDateController,
-                  label: 'Fecha de la solicitud',
-                  onTap: () => _pickDate(_applicationDateController),
-                ),
-                _buildField(
-                  controller: _vacancySummaryController,
-                  label: 'Resumen de la vacante',
-                  hint: 'Describe contexto, objetivos y alcance del rol.',
-                  maxLines: 3,
+                _buildTextField(
+                  controller: _locationController,
+                  label: 'Ubicación',
+                  hint: 'Ej: Bogotá, Colombia',
+                  icon: Icons.location_on_outlined,
                 ),
               ],
             ),
-            _buildSectionCard(
-              title: '2. Datos Personales y de Contacto',
+            _buildSection(
+              icon: Icons.tune_rounded,
+              title: 'Condiciones del Cargo',
               children: [
-                _buildField(controller: _fullNameController, label: 'Nombre completo'),
-                _buildField(
-                  controller: _phoneController,
-                  label: 'Telefono',
-                  keyboardType: TextInputType.phone,
+                _buildDropdown(
+                  label: 'Modalidad',
+                  icon: Icons.laptop_mac_outlined,
+                  value: _modality,
+                  options: _modalityOptions,
+                  onChanged: (v) => setState(() => _modality = v),
+                  validator: (v) => v == null ? 'Selecciona una modalidad' : null,
                 ),
-                _buildField(
-                  controller: _emailController,
-                  label: 'Correo electronico',
-                  keyboardType: TextInputType.emailAddress,
-                  validator: _emailValidator,
+                _buildDropdown(
+                  label: 'Tipo de empleo',
+                  icon: Icons.schedule_outlined,
+                  value: _employmentType,
+                  options: _employmentOptions,
+                  onChanged: (v) => setState(() => _employmentType = v),
+                  validator: (v) => v == null ? 'Selecciona el tipo de empleo' : null,
                 ),
-                _buildField(
-                  controller: _addressController,
-                  label: 'Domicilio permanente',
-                  maxLines: 2,
+                _buildDropdown(
+                  label: 'Nivel de experiencia',
+                  icon: Icons.trending_up_rounded,
+                  value: _experienceLevel,
+                  options: _experienceOptions,
+                  onChanged: (v) => setState(() => _experienceLevel = v),
+                  validator: (v) => v == null ? 'Selecciona el nivel requerido' : null,
                 ),
-                _buildDateField(
-                  controller: _birthDateController,
-                  label: 'Fecha de nacimiento',
-                  onTap: () => _pickDate(_birthDateController),
+                _buildSalaryRow(),
+              ],
+            ),
+            _buildSection(
+              icon: Icons.person_search_outlined,
+              title: 'Perfil Requerido',
+              children: [
+                _buildTagInput(
+                  label: 'Tecnologías requeridas',
+                  hint: 'Ej: Java, Spring Boot, Docker...',
+                  icon: Icons.code_rounded,
+                  tags: _technologies,
+                  onChanged: (tags) => setState(() => _technologies = tags),
+                ),
+                const SizedBox(height: 8),
+                _buildTagInput(
+                  label: 'Habilidades blandas',
+                  hint: 'Ej: Trabajo en equipo, Comunicación...',
+                  icon: Icons.psychology_outlined,
+                  tags: _softSkills,
+                  onChanged: (tags) => setState(() => _softSkills = tags),
                 ),
               ],
             ),
-            _buildSectionCard(
-              title: '3. Documentacion Legal e Identificacion',
+            _buildSection(
+              icon: Icons.checklist_rounded,
+              title: 'Responsabilidades y Requisitos',
               children: [
-                _buildField(
-                  controller: _officialIdController,
-                  label: 'Identificaciones oficiales',
-                  hint: 'CURP, RFC, NSS u otra identificacion valida.',
-                ),
-                _buildField(
-                  controller: _otherDocumentsController,
-                  label: 'Otros documentos',
-                  hint: 'Licencia, pasaporte, cartilla militar, etc.',
-                ),
-              ],
-            ),
-            _buildSectionCard(
-              title: '4. Formacion Academica',
-              children: [
-                _buildField(
-                  controller: _academicLevelController,
-                  label: 'Nivel academico',
-                  hint: 'Primaria, secundaria, preparatoria, profesional o tecnica.',
-                ),
-                _buildField(
-                  controller: _institutionDetailsController,
-                  label: 'Detalles de la institucion',
-                  maxLines: 2,
-                ),
-              ],
-            ),
-            _buildSectionCard(
-              title: '5. Historial Laboral (Experiencia)',
-              children: [
-                _buildField(
-                  controller: _previousEmploymentController,
-                  label: 'Datos de empleos anteriores',
-                  maxLines: 3,
-                ),
-                _buildField(
-                  controller: _responsibilitiesController,
+                _buildDynamicList(
                   label: 'Responsabilidades',
-                  maxLines: 3,
+                  hint: 'Ej: Diseñar e implementar APIs REST...',
+                  icon: Icons.task_alt_outlined,
+                  items: _responsibilities,
+                  onChanged: (items) => setState(() => _responsibilities = items),
                 ),
-                _buildField(
-                  controller: _salaryHistoryController,
-                  label: 'Sueldos (inicial/final)',
-                  maxLines: 2,
-                ),
-              ],
-            ),
-            _buildSectionCard(
-              title: '6. Conocimientos y Habilidades',
-              children: [
-                _buildField(controller: _languagesController, label: 'Idiomas y nivel'),
-                _buildField(controller: _officeFunctionsController, label: 'Funciones de oficina'),
-                _buildField(controller: _softwareController, label: 'Software y maquinaria'),
-                _buildField(controller: _softSkillsController, label: 'Habilidades blandas'),
-              ],
-            ),
-            _buildSectionCard(
-              title: '7. Referencias Personales y Laborales',
-              children: [
-                _buildField(
-                  controller: _referencesController,
-                  label: 'Contactos de referencia',
-                  maxLines: 2,
-                ),
-                _buildField(
-                  controller: _referencesContactController,
-                  label: 'Telefono y tiempo de conocerse',
+                const SizedBox(height: 16),
+                _buildDynamicList(
+                  label: 'Requisitos técnicos',
+                  hint: 'Ej: 3+ años de experiencia en Java...',
+                  icon: Icons.verified_outlined,
+                  items: _technicalRequirements,
+                  onChanged: (items) => setState(() => _technicalRequirements = items),
                 ),
               ],
             ),
-            _buildSectionCard(
-              title: '8. Otros Apartados y Killer Questions',
+            _buildSection(
+              icon: Icons.card_giftcard_outlined,
+              title: 'Beneficios',
               children: [
-                _buildField(
-                  controller: _openQuestionsController,
-                  label: 'Preguntas abiertas',
-                  maxLines: 3,
-                ),
-                _buildField(
-                  controller: _killerQuestionsController,
-                  label: 'Killer Questions',
-                  maxLines: 2,
-                ),
-                _buildField(
-                  controller: _attachmentsController,
-                  label: 'Carga de documentos',
-                  hint: 'Ruta local, URL o descripcion del CV/portafolio.',
-                ),
-                const SizedBox(height: 4),
-                OutlinedButton.icon(
-                  onPressed: _pickAttachment,
-                  icon: const Icon(Icons.attach_file_rounded),
-                  label: const Text('Seleccionar CV o Portafolio'),
-                ),
-                _buildField(
-                  controller: _habitsGoalsController,
-                  label: 'Habitos y metas',
-                  maxLines: 2,
+                _buildTagInput(
+                  label: 'Beneficios ofrecidos',
+                  hint: 'Ej: Seguro médico, Home office, Bonos...',
+                  icon: Icons.stars_outlined,
+                  tags: _benefits,
+                  onChanged: (tags) => setState(() => _benefits = tags),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _isSubmitting ? null : _submit,
-                icon: _isSubmitting
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.publish_rounded),
-                label: Text(
-                  _isSubmitting ? 'Publicando...' : 'Publicar Vacante',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(56),
-                  backgroundColor: JobSwipeTheme.primaryIndigo,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
-            ),
+            _buildSubmitButton(),
           ],
         ),
       ),
     );
   }
 
+  // ───────────────────────────── WIDGETS ─────────────────────────────
+
   Widget _buildHeader() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Crear Vacante',
+          'Publicar Vacante',
           style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
             color: Color(0xFF6366F1),
             letterSpacing: -0.5,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Text(
-          'Completa los 8 apartados para publicar una vacante completa.',
-          style: TextStyle(
-            fontSize: 13,
-            color: Colors.grey.shade600,
-            fontWeight: FontWeight.w500,
-          ),
+          'Completa los campos para que los candidatos ideales encuentren tu oferta.',
+          style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
         ),
       ],
     );
   }
 
-  Widget _buildSectionCard({required String title, required List<Widget> children}) {
+  Widget _buildSection({
+    required IconData icon,
+    required String title,
+    required List<Widget> children,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.06),
-            blurRadius: 10,
+            color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.05),
+            blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
@@ -327,216 +245,473 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF6366F1),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.06),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, color: JobSwipeTheme.primaryIndigo, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: JobSwipeTheme.primaryIndigo,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 12),
-          ...children,
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildField({
+  Widget _buildTextField({
     required TextEditingController controller,
     required String label,
-    String? hint,
+    required String hint,
+    required IconData icon,
     int maxLines = 1,
     TextInputType keyboardType = TextInputType.text,
     String? Function(String?)? validator,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 14),
       child: TextFormField(
         controller: controller,
         maxLines: maxLines,
         keyboardType: keyboardType,
         validator: validator ?? _requiredValidator,
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          filled: true,
-          fillColor: const Color(0xFFF8FAFC),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(
-              color: JobSwipeTheme.primaryIndigo,
-              width: 1.6,
-            ),
-          ),
-        ),
+        decoration: _inputDecoration(label: label, hint: hint, icon: icon),
       ),
     );
   }
 
-  Widget _buildDateField({
-    required TextEditingController controller,
+  Widget _buildDropdown({
     required String label,
-    required VoidCallback onTap,
+    required IconData icon,
+    required String? value,
+    required Map<String, String> options,
+    required ValueChanged<String?> onChanged,
+    required String? Function(String?)? validator,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: TextFormField(
-        controller: controller,
-        readOnly: true,
-        validator: _requiredValidator,
-        onTap: onTap,
-        decoration: InputDecoration(
-          labelText: label,
-          suffixIcon: const Icon(Icons.calendar_month_rounded),
-          filled: true,
-          fillColor: const Color(0xFFF8FAFC),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      padding: const EdgeInsets.only(bottom: 14),
+      child: DropdownButtonFormField<String>(
+        value: value,
+        validator: validator,
+        onChanged: onChanged,
+        isExpanded: true,
+        decoration: _inputDecoration(label: label, hint: 'Seleccionar...', icon: icon),
+        items: options.entries
+            .map(
+              (entry) => DropdownMenuItem<String>(
+                value: entry.key,
+                child: Text(entry.value),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  Widget _buildSalaryRow() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.attach_money_rounded,
+                  size: 16, color: Colors.grey.shade500),
+              const SizedBox(width: 6),
+              Text(
+                'Rango salarial mensual (COP)',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w600),
+              ),
+            ],
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _minSalaryController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: _salaryValidator,
+                  decoration: _inputDecoration(
+                    label: 'Mínimo',
+                    hint: 'Ej: 3000000',
+                    icon: Icons.remove_circle_outline,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _maxSalaryController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: _maxSalaryValidator,
+                  decoration: _inputDecoration(
+                    label: 'Máximo',
+                    hint: 'Ej: 5000000',
+                    icon: Icons.add_circle_outline,
+                  ),
+                ),
+              ),
+            ],
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(
-              color: JobSwipeTheme.primaryIndigo,
-              width: 1.6,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTagInput({
+    required String label,
+    required String hint,
+    required IconData icon,
+    required List<String> tags,
+    required ValueChanged<List<String>> onChanged,
+  }) {
+    final TextEditingController tagController = TextEditingController();
+
+    void addTag(String value) {
+      final String trimmed = value.trim();
+      if (trimmed.isNotEmpty && !tags.contains(trimmed)) {
+        onChanged([...tags, trimmed]);
+        tagController.clear();
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 16, color: Colors.grey.shade500),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w600),
             ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (tags.isNotEmpty)
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: tags
+                .map(
+                  (tag) => Chip(
+                    label: Text(tag,
+                        style: const TextStyle(fontSize: 12, color: Colors.white)),
+                    backgroundColor: JobSwipeTheme.primaryIndigo,
+                    deleteIconColor: Colors.white70,
+                    deleteIcon: const Icon(Icons.close, size: 14),
+                    onDeleted: () {
+                      final List<String> updated = List.from(tags)..remove(tag);
+                      onChanged(updated);
+                    },
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                )
+                .toList(),
           ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: tagController,
+                decoration: _inputDecoration(
+                  label: '',
+                  hint: hint,
+                  icon: Icons.add,
+                ).copyWith(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  isDense: true,
+                ),
+                onSubmitted: addTag,
+              ),
+            ),
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: () => addTag(tagController.text),
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: JobSwipeTheme.primaryIndigo,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.add, color: Colors.white, size: 18),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDynamicList({
+    required String label,
+    required String hint,
+    required IconData icon,
+    required List<String> items,
+    required ValueChanged<List<String>> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 16, color: Colors.grey.shade500),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...List.generate(items.length, (index) {
+          final TextEditingController ctrl =
+              TextEditingController(text: items[index]);
+          ctrl.selection =
+              TextSelection.collapsed(offset: ctrl.text.length);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${index + 1}',
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: JobSwipeTheme.primaryIndigo),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: TextFormField(
+                    controller: ctrl,
+                    decoration: _inputDecoration(
+                      label: '',
+                      hint: hint,
+                      icon: Icons.drag_indicator,
+                    ).copyWith(
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      isDense: true,
+                    ),
+                    onChanged: (value) {
+                      final List<String> updated = List.from(items);
+                      updated[index] = value;
+                      onChanged(updated);
+                    },
+                  ),
+                ),
+                if (items.length > 1)
+                  IconButton(
+                    icon: Icon(Icons.remove_circle_outline,
+                        color: Colors.red.shade400, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () {
+                      final List<String> updated = List.from(items)
+                        ..removeAt(index);
+                      onChanged(updated);
+                    },
+                  ),
+              ],
+            ),
+          );
+        }),
+        TextButton.icon(
+          onPressed: () => onChanged([...items, '']),
+          icon: Icon(Icons.add_circle_outline,
+              size: 16, color: JobSwipeTheme.primaryIndigo),
+          label: Text(
+            'Agregar ítem',
+            style: TextStyle(
+                fontSize: 13, color: JobSwipeTheme.primaryIndigo),
+          ),
+          style: TextButton.styleFrom(padding: EdgeInsets.zero),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _isSubmitting ? null : _submit,
+        icon: _isSubmitting
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
+              )
+            : const Icon(Icons.rocket_launch_rounded),
+        label: Text(
+          _isSubmitting ? 'Publicando...' : 'Publicar Vacante',
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+        ),
+        style: ElevatedButton.styleFrom(
+          minimumSize: const Size.fromHeight(56),
+          backgroundColor: JobSwipeTheme.primaryIndigo,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.5),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          elevation: 0,
         ),
       ),
     );
   }
 
-  Future<void> _pickDate(TextEditingController controller) async {
-    final DateTime now = DateTime.now();
-    final DateTime firstDate = DateTime(now.year - 80);
-    final DateTime lastDate = DateTime(now.year + 10);
-
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: now,
-      firstDate: firstDate,
-      lastDate: lastDate,
+  InputDecoration _inputDecoration({
+    required String label,
+    required String hint,
+    required IconData icon,
+  }) {
+    return InputDecoration(
+      labelText: label.isEmpty ? null : label,
+      hintText: hint,
+      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+      prefixIcon: Icon(icon, size: 18, color: Colors.grey.shade400),
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide:
+            BorderSide(color: JobSwipeTheme.primaryIndigo, width: 1.8),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFEF4444)),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.8),
+      ),
     );
-
-    if (picked != null && mounted) {
-      final String formatted =
-          '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-      controller.text = formatted;
-    }
   }
+
+  // ───────────────────────────── VALIDATORS ─────────────────────────────
 
   String? _requiredValidator(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Este campo es obligatorio';
-    }
-    return null;
-  }
-
-  String? _emailValidator(String? value) {
-    final String? requiredMessage = _requiredValidator(value);
-    if (requiredMessage != null) {
-      return requiredMessage;
-    }
-    final bool isValid = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value!.trim());
-    if (!isValid) {
-      return 'Correo invalido';
-    }
+    if (value == null || value.trim().isEmpty) return 'Este campo es obligatorio';
     return null;
   }
 
   String? _salaryValidator(String? value) {
-    final String? requiredMessage = _requiredValidator(value);
-    if (requiredMessage != null) {
-      return requiredMessage;
-    }
-
-    final double? salary = double.tryParse(value!.trim());
-    if (salary == null || salary < 0) {
-      return 'Ingresa un monto valido';
-    }
+    if (value == null || value.trim().isEmpty) return 'Ingresa el salario mínimo';
+    final double? amount = double.tryParse(value.trim());
+    if (amount == null || amount < 0) return 'Ingresa un monto válido';
     return null;
   }
 
+  String? _maxSalaryValidator(String? value) {
+    final String? base = _salaryValidator(value);
+    if (base != null) return base.replaceFirst('mínimo', 'máximo');
+    final double min = double.tryParse(_minSalaryController.text.trim()) ?? 0;
+    final double max = double.tryParse(value!.trim()) ?? 0;
+    if (max < min) return 'Debe ser ≥ al salario mínimo';
+    return null;
+  }
+
+  // ───────────────────────────── SUBMIT ─────────────────────────────
+
   Future<void> _submit() async {
-    if (_isSubmitting) {
-      return;
-    }
+    if (_isSubmitting) return;
+    if (!_formKey.currentState!.validate()) return;
 
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    final List<String> cleanResponsibilities =
+        _responsibilities.where((s) => s.trim().isNotEmpty).toList();
+    final List<String> cleanRequirements =
+        _technicalRequirements.where((s) => s.trim().isNotEmpty).toList();
 
-    final double salary = double.parse(_desiredSalaryController.text.trim());
-
-    setState(() {
-      _isSubmitting = true;
-    });
+    setState(() => _isSubmitting = true);
 
     try {
-      final ExtendedVacancyFormData payload = ExtendedVacancyFormData(
-        positionRequested: _positionController.text.trim(),
-        vacancySummary: _vacancySummaryController.text.trim(),
-        desiredMonthlySalary: salary,
-        applicationDate: _applicationDateController.text.trim(),
-        candidateFullName: _fullNameController.text.trim(),
-        phoneNumber: _phoneController.text.trim(),
-        email: _emailController.text.trim(),
-        permanentAddress: _addressController.text.trim(),
-        birthDate: _birthDateController.text.trim(),
-        officialIdentification: _officialIdController.text.trim(),
-        otherDocuments: _otherDocumentsController.text.trim(),
-        academicLevel: _academicLevelController.text.trim(),
-        institutionDetails: _institutionDetailsController.text.trim(),
-        previousEmploymentData: _previousEmploymentController.text.trim(),
-        responsibilities: _responsibilitiesController.text.trim(),
-        salaryHistory: _salaryHistoryController.text.trim(),
-        languages: _languagesController.text.trim(),
-        officeFunctions: _officeFunctionsController.text.trim(),
-        softwareAndMachinery: _softwareController.text.trim(),
-        softSkills: _softSkillsController.text.trim(),
-        personalAndWorkReferences: _referencesController.text.trim(),
-        referencesContactInfo: _referencesContactController.text.trim(),
-        openQuestionsAnswers: _openQuestionsController.text.trim(),
-        killerQuestionsAnswers: _killerQuestionsController.text.trim(),
-        documentAttachments: _attachmentsController.text.trim(),
-        habitsAndGoals: _habitsGoalsController.text.trim(),
-      );
+      await _vacancyService.createVacancy(VacancyFormData(
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        location: _locationController.text.trim(),
+        modality: _modality!,
+        employmentType: _employmentType!,
+        experienceLevel: _experienceLevel!,
+        technologies: _technologies,
+        softSkills: _softSkills,
+        responsibilities: cleanResponsibilities,
+        technicalRequirements: cleanRequirements,
+        minSalary: double.parse(_minSalaryController.text.trim()),
+        maxSalary: double.parse(_maxSalaryController.text.trim()),
+        benefits: _benefits,
+      ));
 
-      await _vacancyService.createExtendedVacancy(
-        payload,
-        attachment: _selectedAttachment,
-      );
-
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Vacante creada exitosamente.'),
+          content: Text('¡Vacante publicada exitosamente!'),
           backgroundColor: Color(0xFF10B981),
         ),
       );
-      _formKey.currentState!.reset();
-      _selectedAttachment = null;
-      _clearControllers();
+      _resetForm();
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(error.toString()),
@@ -544,86 +719,26 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
         ),
       );
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
-  Future<void> _pickAttachment() async {
-    final FilePickerResult? result = await FilePicker.platform.pickFiles(
-      withData: true,
-      allowMultiple: false,
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx', 'txt'],
-    );
-
-    if (result == null || result.files.isEmpty) {
-      return;
-    }
-
-    final PlatformFile file = result.files.first;
-    final Uint8List? bytes = file.bytes;
-    if (bytes == null || bytes.isEmpty) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo leer el archivo seleccionado.')),
-      );
-      return;
-    }
-
-    if (bytes.length > 3 * 1024 * 1024) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('El archivo no puede superar 3MB.')),
-      );
-      return;
-    }
-
+  void _resetForm() {
+    _formKey.currentState!.reset();
+    _titleController.clear();
+    _descriptionController.clear();
+    _locationController.clear();
+    _minSalaryController.clear();
+    _maxSalaryController.clear();
     setState(() {
-      _selectedAttachment = file;
-      _attachmentsController.text = file.name;
+      _modality = null;
+      _employmentType = null;
+      _experienceLevel = null;
+      _technologies = [];
+      _softSkills = [];
+      _benefits = [];
+      _responsibilities = [''];
+      _technicalRequirements = [''];
     });
-  }
-
-  void _clearControllers() {
-    final List<TextEditingController> controllers = [
-      _positionController,
-      _vacancySummaryController,
-      _desiredSalaryController,
-      _applicationDateController,
-      _fullNameController,
-      _phoneController,
-      _emailController,
-      _addressController,
-      _birthDateController,
-      _officialIdController,
-      _otherDocumentsController,
-      _academicLevelController,
-      _institutionDetailsController,
-      _previousEmploymentController,
-      _responsibilitiesController,
-      _salaryHistoryController,
-      _languagesController,
-      _officeFunctionsController,
-      _softwareController,
-      _softSkillsController,
-      _referencesController,
-      _referencesContactController,
-      _openQuestionsController,
-      _killerQuestionsController,
-      _attachmentsController,
-      _habitsGoalsController,
-    ];
-
-    for (final TextEditingController controller in controllers) {
-      controller.clear();
-    }
   }
 }
