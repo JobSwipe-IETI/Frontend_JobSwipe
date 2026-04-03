@@ -18,7 +18,6 @@ class CompanyProfileWidget extends StatefulWidget {
 
 class _CompanyProfileWidgetState extends State<CompanyProfileWidget> {
   bool _notificationsOn = true;
-  bool _isSwitching = false;
 
   final List<Map<String, String>> _stats = const [
     {'label': 'Vistas', 'value': '942'},
@@ -55,26 +54,6 @@ class _CompanyProfileWidgetState extends State<CompanyProfileWidget> {
     {'label': 'Sede', 'value': 'Bogota, Colombia'},
   ];
 
-  Future<void> _switchToCandidate() async {
-    setState(() => _isSwitching = true);
-    try {
-      await widget.userProvider.switchUserType();
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Modo candidato activado')));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('No se pudo cambiar el modo: $e')));
-    } finally {
-      if (mounted) {
-        setState(() => _isSwitching = false);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final profile = widget.userProvider.currentUser;
@@ -94,8 +73,6 @@ class _CompanyProfileWidgetState extends State<CompanyProfileWidget> {
                 child: Column(
                   children: [
                     _buildStatsGrid(),
-                    const SizedBox(height: 12),
-                    _buildRoleSwitcher(),
                     const SizedBox(height: 12),
                     _buildCompanyDataCard(profile.email),
                     const SizedBox(height: 12),
@@ -276,115 +253,6 @@ class _CompanyProfileWidgetState extends State<CompanyProfileWidget> {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildRoleSwitcher() {
-    return _card(
-      border: Border.all(color: const Color(0xFF7C4DFF), width: 2),
-      child: Column(
-        children: [
-          Row(
-            children: const [
-              Icon(
-                Icons.swap_horiz_rounded,
-                color: Color(0xFF7C4DFF),
-                size: 18,
-              ),
-              SizedBox(width: 10),
-              Text(
-                'Modo de cuenta',
-                style: TextStyle(
-                  color: Color(0xFF263238),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFF1F5F9)),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _modeButton(
-                      label: 'Candidato',
-                      icon: Icons.person_rounded,
-                      active: false,
-                      onPressed: _isSwitching ? null : _switchToCandidate,
-                    ),
-                  ),
-                  Expanded(
-                    child: _modeButton(
-                      label: 'Empresa',
-                      icon: Icons.business_rounded,
-                      active: true,
-                      onPressed: null,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Modo empresa activo',
-            style: TextStyle(
-              color: Color(0xFF7C4DFF),
-              fontWeight: FontWeight.w600,
-              fontSize: 11,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _modeButton({
-    required String label,
-    required IconData icon,
-    required bool active,
-    required VoidCallback? onPressed,
-  }) {
-    final bg = active ? const Color(0xFF7C4DFF) : Colors.white;
-    final fg = active ? Colors.white : const Color(0xFF666666);
-
-    return Material(
-      color: bg,
-      child: InkWell(
-        onTap: onPressed,
-        child: SizedBox(
-          height: 44,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (!active && _isSwitching)
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                Icon(icon, size: 14, color: fg),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: fg,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 

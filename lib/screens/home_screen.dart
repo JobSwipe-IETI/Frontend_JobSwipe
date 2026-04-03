@@ -8,11 +8,13 @@ import '../controllers/user_provider.dart';
 import '../widgets/candidate_profile_widget.dart';
 import '../widgets/company_profile_widget.dart';
 import 'create_vacancy_screen.dart';
+import '../services/auth_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.onLogout});
+  const HomeScreen({super.key, required this.onLogout, required this.jwt});
 
   final VoidCallback onLogout;
+  final String jwt;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -63,10 +65,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
-    // Inicializar UserProvider con perfil mock (en producción vendría del backend)
+    
+    // Decodificar JWT para obtener el rol
+    final role = AuthService.extractRoleFromJwt(widget.jwt);
+    final isCompany = role?.toUpperCase() == 'COMPANY';
+    
+    // Inicializar UserProvider con el perfil correcto basado en el rol
     _userProvider = UserProvider(
-      initialUser: UserProfile.mockCandidateProfile(),
+      initialUser: isCompany 
+        ? UserProfile.mockCompanyProfile()
+        : UserProfile.mockCandidateProfile(),
     );
+    
     _pageController = PageController(initialPage: _selectedIndex);
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 400),
@@ -74,37 +84,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
     _animationController.forward();
     
-    // Escuchar cambios en el UserProvider para reconstruir cuando cambia el tipo de cuenta
-    _userProvider.addListener(_onUserTypeChanged);
-    
     _loadPermissions();
-  }
-
-  void _onUserTypeChanged() {
-    // Cuando cambia el tipo de usuario, reconstruir el widget para actualizar las tabs
-    if (mounted) {
-      setState(() {
-        // Resetear el índice de página si el nuevo tab no existe
-        if (_selectedIndex >= _getPageCount()) {
-          _selectedIndex = 2; // Ir al perfil
-          // Usar Future.microtask para permitir que el widget se reconstruya primero
-          Future.microtask(() {
-            if (_pageController.hasClients) {
-              _pageController.jumpToPage(_selectedIndex);
-            }
-          });
-        }
-      });
-    }
-  }
-
-  int _getPageCount() {
-    return _isCompanyAccount ? 4 : 3;
   }
 
   @override
   void dispose() {
-    _userProvider.removeListener(_onUserTypeChanged);
     _pageController.dispose();
     _animationController.dispose();
     super.dispose();

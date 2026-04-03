@@ -53,20 +53,6 @@ class UserProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Cambia el tipo de usuario (Candidato ↔ Empresa)
-  Future<void> switchUserType() async {
-    try {
-      // TODO: Aquí se haría el llamado al backend para cambiar el tipo de usuario
-      // await ApiService.switchUserType(_currentUser.id);
-      
-      _currentUser = _currentUser.switchUserType();
-      notifyListeners();
-    } catch (e) {
-      // Manejar error
-      rethrow;
-    }
-  }
-
   /// Obtiene un resumen del perfil para visualización
   String get displayName => _currentUser.userType == UserType.candidate
       ? _currentUser.name

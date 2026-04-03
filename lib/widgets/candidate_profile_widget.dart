@@ -17,7 +17,6 @@ class CandidateProfileWidget extends StatefulWidget {
 }
 
 class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
-  bool _isSwitching = false;
   bool _notificationsOn = true;
   bool _editSkills = false;
 
@@ -77,26 +76,6 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
 
   late final List<String> _userSkills = List<String>.from(_defaultSkills);
 
-  Future<void> _handleSwitchAccount() async {
-    setState(() => _isSwitching = true);
-    try {
-      await widget.userProvider.switchUserType();
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Modo empresa activado')));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('No se pudo cambiar el modo: $e')));
-    } finally {
-      if (mounted) {
-        setState(() => _isSwitching = false);
-      }
-    }
-  }
-
   void _removeSkill(String skill) {
     setState(() {
       _userSkills.remove(skill);
@@ -123,8 +102,6 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
                     _buildProfileCompleteness(),
                     const SizedBox(height: 12),
                     _buildStatsGrid(),
-                    const SizedBox(height: 12),
-                    _buildRoleSwitcher(),
                     const SizedBox(height: 12),
                     _buildSkillsCard(),
                     const SizedBox(height: 12),
@@ -372,106 +349,6 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildRoleSwitcher() {
-    return _card(
-      border: Border.all(color: const Color(0xFFE8EAF6), width: 2),
-      child: Column(
-        children: [
-          Row(
-            children: const [
-              Icon(
-                Icons.swap_horiz_rounded,
-                color: Color(0xFF7C4DFF),
-                size: 18,
-              ),
-              SizedBox(width: 10),
-              Text(
-                'Modo de cuenta',
-                style: TextStyle(
-                  color: Color(0xFF263238),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFF1F5F9)),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _modeButton(
-                      label: 'Candidato',
-                      icon: Icons.person_rounded,
-                      active: true,
-                      onPressed: null,
-                    ),
-                  ),
-                  Expanded(
-                    child: _modeButton(
-                      label: 'Empresa',
-                      icon: Icons.business_rounded,
-                      active: false,
-                      onPressed: _isSwitching ? null : _handleSwitchAccount,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _modeButton({
-    required String label,
-    required IconData icon,
-    required bool active,
-    required VoidCallback? onPressed,
-  }) {
-    final bg = active ? const Color(0xFF1A237E) : Colors.white;
-    final fg = active ? Colors.white : const Color(0xFF666666);
-
-    return Material(
-      color: bg,
-      child: InkWell(
-        onTap: onPressed,
-        child: SizedBox(
-          height: 44,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (!active && _isSwitching)
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                Icon(icon, size: 14, color: fg),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: fg,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
