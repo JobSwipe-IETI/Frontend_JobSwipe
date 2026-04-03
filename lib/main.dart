@@ -213,11 +213,16 @@ class _AuthGateState extends State<AuthGate> {
           userId: _userId,
           onLogout: _logout,
           onCompleted: (result) {
+            final String? newJwt = result['newJwt']?.toString();
             setState(() {
               _requiresOnboarding = false;
               _roleOverride = result['role']?.toString();
+              if (newJwt != null) _jwt = newJwt;
               _profileSeed = result;
             });
+            if (newJwt != null) {
+              _tokenStorage.saveToken(newJwt);
+            }
           },
         );
       }
@@ -226,7 +231,7 @@ class _AuthGateState extends State<AuthGate> {
         onLogout: _logout,
         jwt: _jwt ?? '',
         userId: _userId,
-        roleOverride: _roleOverride,
+        roleOverride: _roleOverride ?? AuthService.extractRoleFromJwt(_jwt ?? ''),
         profileSeed: _profileSeed,
       );
     }

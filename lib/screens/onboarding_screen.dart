@@ -370,8 +370,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           payload: payload,
         );
 
+        final String? newJwt = await _profileApi.updateUserRole(
+          jwt: widget.jwt,
+          role: 'CANDIDATE',
+        );
+
         widget.onCompleted(<String, dynamic>{
           'role': 'CANDIDATE',
+          if (newJwt != null) 'newJwt': newJwt,
           ...payload,
         });
       } else {
@@ -395,8 +401,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           payload: payload,
         );
 
+        final String? newJwt = await _profileApi.updateUserRole(
+          jwt: widget.jwt,
+          role: 'COMPANY',
+        );
+
         widget.onCompleted(<String, dynamic>{
           'role': 'COMPANY',
+          if (newJwt != null) 'newJwt': newJwt,
           ...payload,
         });
       }

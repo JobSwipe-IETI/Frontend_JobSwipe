@@ -117,6 +117,29 @@ class ProfileApiService {
     }
   }
 
+  /// Calls PATCH /api/auth/me/role and returns the new JWT on success, or null.
+  Future<String?> updateUserRole({
+    required String jwt,
+    required String role,
+  }) async {
+    final response = await _client
+        .patch(
+          Uri.parse('${AppConfig.backendBaseUrl}/api/auth/me/role'),
+          headers: <String, String>{
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $jwt',
+          },
+          body: jsonEncode(<String, String>{'role': role}),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      return decoded['accessToken'] as String?;
+    }
+    return null;
+  }
+
   String _extractApiError(http.Response response, {required String fallback}) {
     try {
       final decoded = jsonDecode(response.body);
