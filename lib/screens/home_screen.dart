@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../config/theme.dart';
 import '../models/vacancy_model.dart';
@@ -7,14 +9,26 @@ import '../controllers/swipe_controller.dart';
 import '../controllers/user_provider.dart';
 import '../widgets/candidate_profile_widget.dart';
 import '../widgets/company_profile_widget.dart';
+import 'onboarding_screen.dart';
 import 'create_vacancy_screen.dart';
 import '../services/auth_service.dart';
+import '../services/profile_api_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.onLogout, required this.jwt});
+  const HomeScreen({
+    super.key,
+    required this.onLogout,
+    required this.jwt,
+    this.userId,
+    this.roleOverride,
+    this.profileSeed,
+  });
 
   final VoidCallback onLogout;
   final String jwt;
+  final int? userId;
+  final String? roleOverride;
+  final Map<String, dynamic>? profileSeed;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -24,7 +38,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   int _selectedIndex = 0;
   late AnimationController _animationController;
   late PageController _pageController;
-  // Removed: SecureTokenStorage no longer needed
+  final ProfileApiService _profileApiService = ProfileApiService();
   late UserProvider _userProvider;
   bool get _isCompanyAccount => _userProvider.isCompany;
   bool get _isCandidateAccount => _userProvider.isCandidate;
@@ -67,15 +81,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     super.initState();
     
     // Decodificar JWT para obtener el rol
-    final role = AuthService.extractRoleFromJwt(widget.jwt);
+    final role = widget.roleOverride ?? AuthService.extractRoleFromJwt(widget.jwt);
     final isCompany = role?.toUpperCase() == 'COMPANY';
     
     // Inicializar UserProvider con el perfil correcto basado en el rol
     _userProvider = UserProvider(
-      initialUser: isCompany 
-        ? UserProfile.mockCompanyProfile()
-        : UserProfile.mockCandidateProfile(),
+      initialUser: _buildFallbackProfile(isCompany),
     );
+
+    _applyProfileSeed(widget.profileSeed);
     
     _pageController = PageController(initialPage: _selectedIndex);
     _animationController = AnimationController(
@@ -85,6 +99,183 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _animationController.forward();
     
     _loadPermissions();
+    _loadUserProfile();
+  }
+
+  UserProfile _buildFallbackProfile(bool isCompany) {
+    return UserProfile(
+      id: (widget.userId ?? AuthService.extractUserIdFromJwt(widget.jwt))?.toString() ?? '',
+      name: AuthService.extractNameFromJwt(widget.jwt) ?? '',
+      email: AuthService.extractEmailFromJwt(widget.jwt) ?? '',
+      userType: isCompany ? UserType.company : UserType.candidate,
+      professionalTitle: '',
+      profileImageUrl: AuthService.extractAvatarUrlFromJwt(widget.jwt) ?? '',
+      bannerImageUrl: '',
+      description: '',
+      phoneNumber: '',
+      skills: '',
+      experience: '',
+      education: '',
+      location: '',
+      nationality: '',
+      languages: '',
+      expectedSalary: null,
+      availability: '',
+      portfolioUrl: '',
+      cvUrl: '',
+      companyName: '',
+      companyDescription: '',
+      legalId: '',
+      industry: '',
+      companySize: '',
+      website: '',
+      headquartersLocation: '',
+      hiringContactName: '',
+      hiringContactEmail: '',
+      createdAt: DateTime.now(),
+    );
+  }
+
+  Future<void> _loadUserProfile() async {
+    final int? userId = widget.userId ?? AuthService.extractUserIdFromJwt(widget.jwt);
+    if (userId == null) {
+      return;
+    }
+
+    try {
+      final profileJson = await _profileApiService.getProfileByUserId(
+        jwt: widget.jwt,
+        userId: userId,
+      );
+
+      if (profileJson == null || !mounted) {
+        return;
+      }
+
+      final String? roleClaim = widget.roleOverride ?? AuthService.extractRoleFromJwt(widget.jwt);
+      final bool isCompany = roleClaim?.toUpperCase() == 'COMPANY';
+      final user = _mapUserProfileFromBackend(profileJson, isCompany);
+
+      setState(() {
+        _userProvider.setUser(user);
+      });
+    } catch (_) {
+      // Keep mock data fallback when backend profile cannot be loaded.
+    }
+  }
+
+  Future<void> _openProfileEditor() async {
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (_) => OnboardingScreen(
+          jwt: widget.jwt,
+          userId: widget.userId,
+          onCompleted: (seed) => Navigator.of(context).pop(seed),
+          onLogout: widget.onLogout,
+          initialProfile: _userProvider.currentUser,
+          isEditing: true,
+        ),
+      ),
+    );
+
+    if (result == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _applyProfileSeed(result);
+    });
+  }
+
+  void _applyProfileSeed(Map<String, dynamic>? seed) {
+    if (seed == null) {
+      return;
+    }
+
+    final current = _userProvider.currentUser;
+    final isCompany = (seed['role']?.toString().toUpperCase() == 'COMPANY') || current.userType == UserType.company;
+
+    final updated = current.copyWith(
+      name: seed['displayName']?.toString() ?? seed['name']?.toString() ?? current.name,
+      userType: isCompany ? UserType.company : UserType.candidate,
+      professionalTitle: seed['professionalTitle']?.toString() ?? current.professionalTitle,
+      description: seed['summary']?.toString() ?? seed['companyDescription']?.toString() ?? current.description,
+      phoneNumber: seed['phoneNumber']?.toString() ?? current.phoneNumber,
+      skills: _encodeSeedData(seed['skills']) ?? current.skills,
+      experience: _encodeSeedData(seed['experiences'] ?? seed['experience']) ?? current.experience,
+      education: seed['education']?.toString() ?? current.education,
+      location: seed['location']?.toString() ?? current.location,
+      nationality: seed['nationality']?.toString() ?? current.nationality,
+      languages: seed['languages']?.toString() ?? current.languages,
+      expectedSalary: (seed['expectedSalary'] as num?)?.toDouble() ?? current.expectedSalary,
+      availability: seed['availability']?.toString() ?? current.availability,
+      portfolioUrl: seed['portfolioUrl']?.toString() ?? current.portfolioUrl,
+      cvUrl: seed['cvUrl']?.toString() ?? current.cvUrl,
+      companyName: seed['companyName']?.toString() ?? current.companyName,
+      companyDescription: seed['companyDescription']?.toString() ?? current.companyDescription,
+      legalId: seed['legalId']?.toString() ?? current.legalId,
+      industry: seed['industry']?.toString() ?? current.industry,
+      companySize: seed['companySize']?.toString() ?? current.companySize,
+      website: seed['website']?.toString() ?? current.website,
+      headquartersLocation: seed['headquartersLocation']?.toString() ?? current.headquartersLocation,
+      hiringContactName: seed['hiringContactName']?.toString() ?? current.hiringContactName,
+      hiringContactEmail: seed['hiringContactEmail']?.toString() ?? current.hiringContactEmail,
+    );
+
+    _userProvider.setUser(updated);
+  }
+
+  String? _encodeSeedData(Object? value) {
+    if (value == null) {
+      return null;
+    }
+
+    if (value is String) {
+      return value;
+    }
+
+    return jsonEncode(value);
+  }
+
+  UserProfile _mapUserProfileFromBackend(Map<String, dynamic> json, bool isCompany) {
+    final String name = AuthService.extractNameFromJwt(widget.jwt) ?? _userProvider.currentUser.name;
+    final String email = AuthService.extractEmailFromJwt(widget.jwt) ?? _userProvider.currentUser.email;
+    final String avatarUrl = AuthService.extractAvatarUrlFromJwt(widget.jwt) ?? _userProvider.currentUser.profileImageUrl;
+
+    final Map<String, dynamic>? candidate = json['candidateProfile'] as Map<String, dynamic>?;
+    final Map<String, dynamic>? company = json['companyProfile'] as Map<String, dynamic>?;
+
+    return UserProfile(
+      id: (widget.userId ?? AuthService.extractUserIdFromJwt(widget.jwt))?.toString() ?? _userProvider.currentUser.id,
+      name: name,
+      email: email,
+      userType: isCompany ? UserType.company : UserType.candidate,
+      professionalTitle: json['professionalTitle']?.toString(),
+      profileImageUrl: avatarUrl,
+      bannerImageUrl: _userProvider.currentUser.bannerImageUrl,
+      description: json['summary']?.toString() ?? '',
+      phoneNumber: json['phoneNumber']?.toString(),
+      skills: json['skills']?.toString(),
+      experience: json['experience']?.toString(),
+      education: json['education']?.toString(),
+      location: json['location']?.toString(),
+      nationality: json['nationality']?.toString(),
+      languages: candidate?['languages']?.toString(),
+      expectedSalary: (candidate?['expectedSalary'] as num?)?.toDouble(),
+      availability: candidate?['availability']?.toString(),
+      portfolioUrl: candidate?['portfolioUrl']?.toString(),
+      cvUrl: candidate?['cvUrl']?.toString(),
+      companyName: company?['companyName']?.toString(),
+      companyDescription: company?['companyDescription']?.toString(),
+      legalId: company?['legalId']?.toString(),
+      industry: company?['industry']?.toString(),
+      companySize: company?['companySize']?.toString(),
+      website: company?['website']?.toString(),
+      headquartersLocation: company?['headquartersLocation']?.toString(),
+      hiringContactName: company?['hiringContactName']?.toString(),
+      hiringContactEmail: company?['hiringContactEmail']?.toString(),
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now(),
+    );
   }
 
   @override
@@ -275,10 +466,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ? CandidateProfileWidget(
             userProvider: _userProvider,
             onLogout: _showLogoutDialog,
+            onEditProfile: _openProfileEditor,
           )
         : CompanyProfileWidget(
             userProvider: _userProvider,
             onLogout: _showLogoutDialog,
+            onEditProfile: _openProfileEditor,
           );
   }
 
