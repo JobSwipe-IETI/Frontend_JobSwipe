@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'config/theme.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/splash_screen.dart';
 import 'services/auth_service.dart';
 import 'services/secure_token_storage.dart';
 
@@ -17,13 +19,34 @@ class JobSwipeApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'JobSwipe',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue.shade700),
-        scaffoldBackgroundColor: Colors.white,
-        useMaterial3: true,
-      ),
-      home: const AuthGate(),
+      theme: JobSwipeTheme.getTheme(),
+      home: const AppInitializer(),
     );
+  }
+}
+
+class AppInitializer extends StatefulWidget {
+  const AppInitializer({super.key});
+
+  @override
+  State<AppInitializer> createState() => _AppInitializerState();
+}
+
+class _AppInitializerState extends State<AppInitializer> {
+  bool _showSplash = true;
+
+  void _completeSplash() {
+    setState(() {
+      _showSplash = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_showSplash) {
+      return SplashScreen(onSplashComplete: _completeSplash);
+    }
+    return const AuthGate();
   }
 }
 
