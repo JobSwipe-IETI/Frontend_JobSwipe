@@ -4,13 +4,7 @@ class AppConfig {
   static const String googleWebClientId = String.fromEnvironment(
     'GOOGLE_WEB_CLIENT_ID',
     defaultValue:
-        '481782536231-7hvevp8cg7cepkfo93esqlpcis1mhjkc.apps.googleusercontent.com',
-  );
-
-  static const String googleAndroidClientId = String.fromEnvironment(
-    'GOOGLE_ANDROID_CLIENT_ID',
-    defaultValue:
-        '481782536231-7hvevp8cg7cepkfo93esqlpcis1mhjkc.apps.googleusercontent.com',
+      '481782536231-7voacirhb9v58eko1id5rjdt2gjo1r4g.apps.googleusercontent.com',
   );
 
   static const String backendBaseUrl = String.fromEnvironment(
