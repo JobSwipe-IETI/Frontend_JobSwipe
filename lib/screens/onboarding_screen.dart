@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:country_picker/country_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl_phone_number_input/intl_phone_number_input.dart';
@@ -63,6 +64,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   bool _isSubmitting = false;
   bool _isFormattingSalary = false;
+  bool _isExtractingCv = false;
+  bool _showCandidateManualForm = false;
   bool _candidatePhoneValid = true;
   bool _companyPhoneValid = true;
   String _candidatePhoneIsoCode = 'CO';
@@ -72,10 +75,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   AccountType? _accountType;
   String? _candidateNationality;
   String? _companyNationality;
-  String? _selectedEducation;
   String? _selectedAvailability;
   String? _selectedIndustry;
   String? _selectedCompanySize;
+  String? _selectedCvFileName;
 
   final TextEditingController _displayNameController = TextEditingController();
   final TextEditingController _professionalTitleController = TextEditingController();
@@ -86,8 +89,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _expectedSalaryController = TextEditingController();
   final TextEditingController _availabilityController = TextEditingController();
-  final TextEditingController _portfolioController = TextEditingController();
-  final TextEditingController _cvUrlController = TextEditingController();
+  final TextEditingController _linkInputController = TextEditingController();
 
   final TextEditingController _companyNameController = TextEditingController();
   final TextEditingController _companyDescriptionController = TextEditingController();
@@ -103,6 +105,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   final TextEditingController _skillInputController = TextEditingController();
   final List<String> _candidateSkills = <String>[];
+  final List<String> _professionalLinks = <String>[];
   final List<String> _selectedLanguages = <String>[];
   final List<_ExperienceDraft> _candidateExperiences = <_ExperienceDraft>[];
   String? _languageToAdd;
@@ -179,6 +182,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   void initState() {
     super.initState();
+    _showCandidateManualForm = widget.isEditing;
     _hydrateFromInitialProfile();
   }
 
@@ -199,17 +203,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _locationController.text = profile.location ?? '';
     _nationalityController.text = profile.nationality ?? '';
     _candidateNationality = profile.nationality;
-    _selectedEducation = _educationOptions.contains(profile.education)
-        ? profile.education
-        : null;
     _selectedAvailability = _availabilityOptions.contains(profile.availability)
         ? profile.availability
         : null;
     _phoneController.text = profile.phoneNumber ?? '';
     _expectedSalaryController.text = profile.expectedSalary?.toString() ?? '';
     _availabilityController.text = profile.availability ?? '';
-    _portfolioController.text = profile.portfolioUrl ?? '';
-    _cvUrlController.text = profile.cvUrl ?? '';
+
+    _professionalLinks
+      ..clear()
+      ..addAll(
+        [
+          profile.githubUrl,
+          profile.linkedinUrl,
+          profile.portfolioUrl,
+        ].whereType<String>().map((e) => e.trim()).where((e) => e.isNotEmpty),
+      );
 
     _companyNameController.text = profile.companyName ?? profile.name;
     _companyDescriptionController.text = profile.companyDescription ?? profile.description;
@@ -258,8 +267,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _phoneController.dispose();
     _expectedSalaryController.dispose();
     _availabilityController.dispose();
-    _portfolioController.dispose();
-    _cvUrlController.dispose();
+    _linkInputController.dispose();
     _companyNameController.dispose();
     _companyDescriptionController.dispose();
     _industryController.dispose();
@@ -353,15 +361,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           'summary': _summaryController.text.trim(),
           'skills': _candidateSkills,
           'experiences': _candidateExperiences.map((d) => d.toMap()).toList(),
-          'education': _selectedEducation ?? _educationController.text.trim(),
+          'education': _educationController.text.trim(),
           'location': _locationController.text.trim(),
           'nationality': _candidateNationality ?? _nationalityController.text.trim(),
           'phoneNumber': _phoneController.text.trim(),
           'languages': _selectedLanguages.join(', '),
           'expectedSalary': _parseExpectedSalary(),
           'availability': _selectedAvailability ?? _availabilityController.text.trim(),
-          'portfolioUrl': _portfolioController.text.trim(),
-          'cvUrl': _cvUrlController.text.trim(),
+          'portfolioUrl': _firstPortfolioLink(),
+          'githubUrl': _firstLinkContaining('github.com'),
+          'linkedinUrl': _firstLinkContaining('linkedin.com'),
         };
 
         await _profileApi.createCandidateProfile(
@@ -484,7 +493,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: (_accountType == null || _isSubmitting) ? null : _submit,
+                    onPressed: (_accountType == null ||
+                            _isSubmitting ||
+                            (_accountType == AccountType.candidate && !_isCandidateFormVisible))
+                        ? null
+                        : _submit,
                     child: Text(
                       _isSubmitting
                           ? 'Guardando...'
@@ -540,7 +553,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   List<Widget> _candidateFields() {
-    return <Widget>[
+    final List<Widget> widgets = <Widget>[
+      _buildCandidateStartCard(),
+    ];
+
+    if (!_isCandidateFormVisible) {
+      return widgets;
+    }
+
+    widgets.addAll(<Widget>[
       _field(
         controller: _displayNameController,
         label: 'Nombre completo *',
@@ -557,14 +578,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         maxLines: 3,
         validator: (v) => _requiredWithLength(v, field: 'Resumen', min: 30, max: 1500),
       ),
+      _buildLinksEditor(),
       _buildSkillsEditor(),
       _buildExperiencesEditor(),
-      _dropdownField(
+      _field(
+        controller: _educationController,
         label: 'Educacion',
-        value: _selectedEducation,
-        items: _educationOptions,
-        onChanged: (value) => setState(() => _selectedEducation = value),
-        validator: (value) => value == null || value.isEmpty ? 'Selecciona un nivel educativo' : null,
+        validator: (v) => _optionalMax(v, field: 'Educacion', max: 300),
       ),
       _field(
         controller: _locationController,
@@ -582,7 +602,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             _nationalityController.text = country.name;
           });
         },
-        validator: (value) => (value == null || value.trim().isEmpty) ? 'Nacionalidad es obligatoria' : null,
+        validator: (value) =>
+            (value == null || value.trim().isEmpty) ? 'Nacionalidad es obligatoria' : null,
       ),
       _internationalPhoneField(
         controller: _phoneController,
@@ -617,19 +638,421 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         onChanged: (value) => setState(() => _selectedAvailability = value),
         validator: (value) => value == null || value.isEmpty ? 'Selecciona disponibilidad' : null,
       ),
-      _field(
-        controller: _portfolioController,
-        label: 'URL portafolio',
-        keyboardType: TextInputType.url,
-        validator: (v) => _urlValidator(v, field: 'URL portafolio'),
+    ]);
+
+    return widgets;
+  }
+
+  bool get _isCandidateFormVisible {
+    return _showCandidateManualForm || _hasCandidatePrefillData;
+  }
+
+  bool get _hasCandidatePrefillData {
+    return _displayNameController.text.trim().isNotEmpty ||
+        _professionalTitleController.text.trim().isNotEmpty ||
+        _summaryController.text.trim().isNotEmpty ||
+        _candidateSkills.isNotEmpty ||
+        _selectedLanguages.isNotEmpty ||
+        _candidateExperiences.any(
+          (e) =>
+              e.titleController.text.trim().isNotEmpty ||
+              e.companyController.text.trim().isNotEmpty ||
+              e.startDateController.text.trim().isNotEmpty ||
+              e.endDateController.text.trim().isNotEmpty,
+        );
+  }
+
+  Widget _buildCandidateStartCard() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text(
+              'Comienza con tu hoja de vida',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Sube tu CV para autocompletar los campos o llenalos manualmente.',
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: _isExtractingCv ? null : _pickAndExtractCv,
+              icon: _isExtractingCv
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.upload_file_rounded),
+              label: Text(_isExtractingCv ? 'Extrayendo CV...' : 'Subir hoja de vida (PDF)'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _showCandidateManualForm = true;
+                });
+              },
+              icon: const Icon(Icons.edit_note_rounded),
+              label: const Text('Llenar manualmente'),
+            ),
+            if (_selectedCvFileName != null) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(
+                'Archivo seleccionado: $_selectedCvFileName',
+                style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+              ),
+            ],
+          ],
+        ),
       ),
-      _field(
-        controller: _cvUrlController,
-        label: 'URL CV',
-        keyboardType: TextInputType.url,
-        validator: (v) => _urlValidator(v, field: 'URL CV'),
-      ),
-    ];
+    );
+  }
+
+  Widget _buildLinksEditor() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const Text('Links profesionales', style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: TextFormField(
+                controller: _linkInputController,
+                keyboardType: TextInputType.url,
+                decoration: const InputDecoration(
+                  labelText: 'Agregar link (GitHub, LinkedIn, portafolio)',
+                  border: OutlineInputBorder(),
+                ),
+                onFieldSubmitted: (_) => _addLink(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(onPressed: _addLink, child: const Text('Agregar')),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_professionalLinks.isEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Agrega uno o varios links profesionales',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+            ),
+          )
+        else
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: _professionalLinks
+                  .map(
+                    (link) => Chip(
+                      label: Text(link),
+                      onDeleted: () => setState(() => _professionalLinks.remove(link)),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+
+  Future<void> _pickAndExtractCv() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: <String>['pdf'],
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+
+    final PlatformFile file = result.files.single;
+    final List<int>? bytes = file.bytes;
+    if (bytes == null) {
+      setState(() {
+        _error = 'No se pudo leer el PDF seleccionado.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isExtractingCv = true;
+      _error = null;
+      _selectedCvFileName = file.name;
+    });
+
+    try {
+      final Map<String, dynamic> extracted = await _profileApi.extractCandidateProfileFromCv(
+        fileName: file.name,
+        fileBytes: bytes,
+      );
+      _applyExtractedCandidateProfile(extracted);
+      setState(() {
+        _showCandidateManualForm = true;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExtractingCv = false;
+        });
+      }
+    }
+  }
+
+  void _applyExtractedCandidateProfile(Map<String, dynamic> profile) {
+    setState(() {
+      _displayNameController.text =
+          profile['displayName']?.toString() ??
+          profile['fullName']?.toString() ??
+          profile['name']?.toString() ??
+          _displayNameController.text;
+      _professionalTitleController.text = profile['professionalTitle']?.toString() ?? _professionalTitleController.text;
+      _summaryController.text = profile['summary']?.toString() ?? _summaryController.text;
+      _locationController.text = profile['location']?.toString() ?? _locationController.text;
+      _nationalityController.text = profile['nationality']?.toString() ?? _nationalityController.text;
+      _candidateNationality = profile['nationality']?.toString() ?? _candidateNationality;
+      _phoneController.text = profile['phoneNumber']?.toString() ?? _phoneController.text;
+      _expectedSalaryController.text = profile['expectedSalary']?.toString() ?? _expectedSalaryController.text;
+      _availabilityController.text = profile['availability']?.toString() ?? _availabilityController.text;
+      _educationController.text = _formatEducationValue(profile['education']);
+
+      _professionalLinks
+        ..clear()
+        ..addAll(_extractProfessionalLinks(profile));
+
+      _candidateSkills
+        ..clear()
+        ..addAll(_extractStringList(profile['skills']));
+
+      _selectedLanguages
+        ..clear()
+        ..addAll(_extractLanguages(profile['languages']));
+
+      _candidateExperiences
+        ..clear()
+        ..addAll(_extractExperiences(profile['experience']));
+
+      if (_candidateExperiences.isEmpty) {
+        _candidateExperiences.add(_ExperienceDraft());
+      }
+
+      final String? extractedAvailability = profile['availability']?.toString();
+      if (extractedAvailability != null && extractedAvailability.trim().isNotEmpty) {
+        _selectedAvailability = _availabilityOptions.contains(extractedAvailability)
+            ? extractedAvailability
+            : null;
+      }
+    });
+  }
+
+  List<String> _extractProfessionalLinks(Map<String, dynamic> profile) {
+    final Set<String> links = <String>{};
+
+    for (final value in <dynamic>[
+      profile['links'],
+      profile['github'],
+      profile['githubUrl'],
+      profile['linkedin'],
+      profile['linkedinUrl'],
+      profile['portfolioUrl'],
+      profile['website'],
+    ]) {
+      links.addAll(_extractStringList(value));
+    }
+
+    return links.where((link) => _urlValidator(link, field: 'Link') == null).toList();
+  }
+
+  List<String> _extractLanguages(dynamic value) {
+    final mapped = _extractStringList(value)
+        .map(_normalizeLanguage)
+        .where((lang) => lang.isNotEmpty)
+        .toSet()
+        .toList();
+
+    return mapped.where((lang) => _languageOptions.contains(lang)).toList();
+  }
+
+  String _normalizeLanguage(String raw) {
+    final value = raw.trim().toLowerCase();
+    if (value.isEmpty) {
+      return '';
+    }
+
+    if (value == 'es' || value == 'esp' || value == 'espanol' || value == 'español' || value == 'spanish') {
+      return 'Espanol';
+    }
+
+    if (value == 'en' || value == 'eng' || value == 'ingles' || value == 'inglés' || value == 'english') {
+      return 'English';
+    }
+
+    if (value == 'pt' || value == 'por' || value == 'portugues' || value == 'portuguese') {
+      return 'Portugues';
+    }
+
+    if (value == 'fr' || value == 'french' || value == 'frances' || value == 'francés') {
+      return 'Frances';
+    }
+
+    if (value == 'de' || value == 'german' || value == 'aleman' || value == 'alemán') {
+      return 'Aleman';
+    }
+
+    final title = value[0].toUpperCase() + value.substring(1);
+    return _languageOptions.firstWhere(
+      (lang) => lang.toLowerCase() == title.toLowerCase(),
+      orElse: () => '',
+    );
+  }
+
+  List<String> _extractStringList(dynamic value) {
+    if (value == null) {
+      return <String>[];
+    }
+
+    if (value is List) {
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList();
+    }
+
+    if (value is String) {
+      return value
+          .split(',')
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList();
+    }
+
+    final String text = value.toString().trim();
+    return text.isEmpty ? <String>[] : <String>[text];
+  }
+
+  List<_ExperienceDraft> _extractExperiences(dynamic value) {
+    final List<_ExperienceDraft> result = <_ExperienceDraft>[];
+    if (value is! List) {
+      return result;
+    }
+
+    for (final dynamic item in value) {
+      if (item is! Map<String, dynamic>) {
+        continue;
+      }
+
+      final _ExperienceDraft draft = _ExperienceDraft();
+      draft.titleController.text = item['role']?.toString() ?? item['title']?.toString() ?? '';
+      draft.companyController.text = item['company']?.toString() ?? item['project']?.toString() ?? '';
+      draft.startDateController.text = _normalizeExperienceDate(
+        item['start']?.toString() ?? item['startDate']?.toString(),
+      );
+      draft.endDateController.text = _normalizeExperienceDate(
+        item['end']?.toString() ?? item['endDate']?.toString(),
+        allowEmptyForCurrent: true,
+      );
+      result.add(draft);
+    }
+
+    return result;
+  }
+
+  String _normalizeExperienceDate(String? raw, {bool allowEmptyForCurrent = false}) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) {
+      return '';
+    }
+
+    final lower = value.toLowerCase();
+    if (allowEmptyForCurrent && (lower == 'actual' || lower == 'present' || lower == 'current' || lower == 'hoy')) {
+      return '';
+    }
+
+    final iso = DateTime.tryParse(value);
+    if (iso != null) {
+      return _formatDate(iso);
+    }
+
+    final yearOnly = RegExp(r'^(\d{4})$').firstMatch(value);
+    if (yearOnly != null) {
+      return '${yearOnly.group(1)}-01-01';
+    }
+
+    final yearMonth = RegExp(r'^(\d{4})[-/](\d{1,2})$').firstMatch(value);
+    if (yearMonth != null) {
+      final year = yearMonth.group(1)!;
+      final month = int.parse(yearMonth.group(2)!).toString().padLeft(2, '0');
+      return '$year-$month-01';
+    }
+
+    final monthYear = RegExp(r'^(\d{1,2})[-/](\d{4})$').firstMatch(value);
+    if (monthYear != null) {
+      final month = int.parse(monthYear.group(1)!).toString().padLeft(2, '0');
+      final year = monthYear.group(2)!;
+      return '$year-$month-01';
+    }
+
+    final ddmmyyyy = RegExp(r'^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$').firstMatch(value);
+    if (ddmmyyyy != null) {
+      final day = int.parse(ddmmyyyy.group(1)!).toString().padLeft(2, '0');
+      final month = int.parse(ddmmyyyy.group(2)!).toString().padLeft(2, '0');
+      final year = ddmmyyyy.group(3)!;
+      return '$year-$month-$day';
+    }
+
+    return value;
+  }
+
+  String _formatEducationValue(dynamic education) {
+    if (education == null) {
+      return '';
+    }
+
+    if (education is String) {
+      return education.trim();
+    }
+
+    if (education is List && education.isNotEmpty) {
+      final dynamic first = education.first;
+      if (first is Map<String, dynamic>) {
+        final List<String?> rawParts = <String?>[
+          first['degree']?.toString(),
+          first['institution']?.toString(),
+          first['status']?.toString(),
+        ];
+        final parts = rawParts
+            .whereType<String>()
+            .map((part) => part.trim())
+            .where((part) => part.isNotEmpty)
+            .toList();
+        return parts.join(' - ');
+      }
+      return first.toString().trim();
+    }
+
+    return education.toString().trim();
   }
 
   List<Widget> _companyFields() {
@@ -1180,6 +1603,47 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       return '$field debe iniciar con http:// o https://';
     }
     return null;
+  }
+
+  void _addLink() {
+    final value = _linkInputController.text.trim();
+    final validation = _urlValidator(value, field: 'Link');
+    if (validation != null) {
+      setState(() {
+        _error = validation;
+      });
+      return;
+    }
+
+    if (value.isEmpty || _professionalLinks.contains(value)) {
+      _linkInputController.clear();
+      return;
+    }
+
+    setState(() {
+      _error = null;
+      _professionalLinks.add(value);
+      _linkInputController.clear();
+    });
+  }
+
+  String _firstLinkContaining(String domain) {
+    for (final link in _professionalLinks) {
+      if (link.toLowerCase().contains(domain)) {
+        return link;
+      }
+    }
+    return '';
+  }
+
+  String _firstPortfolioLink() {
+    for (final link in _professionalLinks) {
+      final lower = link.toLowerCase();
+      if (!lower.contains('github.com') && !lower.contains('linkedin.com')) {
+        return link;
+      }
+    }
+    return '';
   }
 
   String? _emailValidator(String? value) {

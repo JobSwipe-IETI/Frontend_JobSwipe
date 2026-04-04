@@ -89,6 +89,44 @@ class ProfileApiService {
     }
   }
 
+  Future<Map<String, dynamic>> extractCandidateProfileFromCv({
+    required String fileName,
+    required List<int> fileBytes,
+  }) async {
+    final Uri uri = Uri.parse('${AppConfig.aiServiceBaseUrl}/profiles/extract-cv');
+
+    final request = http.MultipartRequest('POST', uri)
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          fileBytes,
+          filename: fileName,
+        ),
+      );
+
+    final streamedResponse = await _client.send(request);
+    final response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode != 200) {
+      throw ProfileApiException(
+        _extractApiError(
+          response,
+          fallback: 'No se pudo extraer el perfil del CV (${response.statusCode})',
+        ),
+      );
+    }
+
+    final Object? decoded = jsonDecode(response.body);
+    if (decoded is Map<String, dynamic>) {
+      final Object? candidateProfile = decoded['candidateProfile'];
+      if (candidateProfile is Map<String, dynamic>) {
+        return candidateProfile;
+      }
+    }
+
+    throw const ProfileApiException('El AI service no devolvio candidateProfile.');
+  }
+
   Future<void> createCompanyProfile({
     required String jwt,
     required int userId,
