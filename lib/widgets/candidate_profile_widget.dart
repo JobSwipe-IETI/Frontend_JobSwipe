@@ -316,8 +316,6 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
       profile.languages,
       profile.expectedSalary,
       profile.availability,
-      profile.portfolioUrl,
-      profile.cvUrl,
     ];
 
     final filled = fields.where((value) {
@@ -524,12 +522,8 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
           _infoRow('Idiomas', profile.languages ?? 'No especificado'),
           _infoRow('Salario esperado', salary),
           _infoRow('Disponibilidad', profile.availability ?? 'No especificado'),
-          _infoRow(
-            'Portafolio',
-            profile.portfolioUrl ?? 'No especificado',
-            isLink: true,
-          ),
-          _infoRow('CV', profile.cvUrl ?? 'No especificado', isLink: true),
+          _infoRow('GitHub', profile.githubUrl ?? 'No especificado', isLink: true),
+          _infoRow('LinkedIn', profile.linkedinUrl ?? 'No especificado', isLink: true),
         ],
       ),
     );

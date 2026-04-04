@@ -25,6 +25,8 @@ class UserProfile {
   final String? availability;
   final String? portfolioUrl;
   final String? cvUrl;
+  final String? githubUrl;
+  final String? linkedinUrl;
   final String? companyName; // Para empresas
   final String? companyDescription;
   final String? legalId;
@@ -56,6 +58,8 @@ class UserProfile {
     this.availability,
     this.portfolioUrl,
     this.cvUrl,
+    this.githubUrl,
+    this.linkedinUrl,
     this.companyName,
     this.companyDescription,
     this.legalId,
@@ -89,6 +93,8 @@ class UserProfile {
     String? availability,
     String? portfolioUrl,
     String? cvUrl,
+    String? githubUrl,
+    String? linkedinUrl,
     String? companyName,
     String? companyDescription,
     String? legalId,
@@ -120,6 +126,8 @@ class UserProfile {
       availability: availability ?? this.availability,
       portfolioUrl: portfolioUrl ?? this.portfolioUrl,
       cvUrl: cvUrl ?? this.cvUrl,
+      githubUrl: githubUrl ?? this.githubUrl,
+      linkedinUrl: linkedinUrl ?? this.linkedinUrl,
       companyName: companyName ?? this.companyName,
       companyDescription: companyDescription ?? this.companyDescription,
       legalId: legalId ?? this.legalId,
