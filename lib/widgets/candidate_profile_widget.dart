@@ -519,6 +519,7 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
           _infoRow('Resumen', profile.description),
           _infoRow('Nacionalidad', profile.nationality ?? 'No especificado'),
           _infoRow('Teléfono', profile.phoneNumber ?? 'No especificado'),
+          _infoRow('Sector', profile.industry ?? 'No especificado'),
           _infoRow('Idiomas', profile.languages ?? 'No especificado'),
           _infoRow('Salario esperado', salary),
           _infoRow('Disponibilidad', profile.availability ?? 'No especificado'),

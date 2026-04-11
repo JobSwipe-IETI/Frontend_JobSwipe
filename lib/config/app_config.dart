@@ -15,7 +15,7 @@ class AppConfig {
 
   static const String backendBaseUrl = String.fromEnvironment(
     'BACKEND_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8080',
+    defaultValue: 'http://10.0.2.2:8081',
   );
 
   static const String aiServiceBaseUrl = String.fromEnvironment(

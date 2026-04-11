@@ -23,6 +23,7 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
   final TextEditingController _maxSalaryController = TextEditingController();
 
   // -- Dropdowns --
+  String? _sector;
   String? _modality;
   String? _employmentType;
   String? _experienceLevel;
@@ -48,13 +49,31 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
     'FULL_TIME': 'Tiempo completo',
     'PART_TIME': 'Medio tiempo',
     'FREELANCE': 'Freelance',
-    'INTERNSHIP': 'Prácticas',
+    'PROJECT_BASED': 'Por proyecto',
+    'IMMEDIATE': 'Inmediata',
+    'IN_15_DAYS': 'En 15 dias',
+    'IN_30_DAYS': 'En 30 dias',
   };
 
   static const Map<String, String> _experienceOptions = {
     'JUNIOR': 'Junior',
     'SEMI_SENIOR': 'Semi-Senior',
     'SENIOR': 'Senior',
+  };
+
+  static const Map<String, String> _sectorOptions = {
+    'Tecnologia': 'Tecnologia',
+    'Finanzas': 'Finanzas',
+    'Salud': 'Salud',
+    'Educacion': 'Educacion',
+    'Retail': 'Retail',
+    'Logistica': 'Logistica',
+    'Marketing': 'Marketing',
+    'Construccion': 'Construccion',
+    'Energia': 'Energia',
+    'Servicios': 'Servicios',
+    'Telecomunicaciones': 'Telecomunicaciones',
+    'Otro': 'Otro',
   };
 
   @override
@@ -102,6 +121,14 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
                   label: 'Ubicación',
                   hint: 'Ej: Bogotá, Colombia',
                   icon: Icons.location_on_outlined,
+                ),
+                _buildDropdown(
+                  label: 'Sector',
+                  icon: Icons.category_outlined,
+                  value: _sector,
+                  options: _sectorOptions,
+                  onChanged: (v) => setState(() => _sector = v),
+                  validator: (v) => v == null ? 'Selecciona un sector' : null,
                 ),
               ],
             ),
@@ -689,6 +716,7 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         location: _locationController.text.trim(),
+        sector: _sector!,
         modality: _modality!,
         employmentType: _employmentType!,
         experienceLevel: _experienceLevel!,
@@ -731,6 +759,7 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
     _minSalaryController.clear();
     _maxSalaryController.clear();
     setState(() {
+      _sector = null;
       _modality = null;
       _employmentType = null;
       _experienceLevel = null;

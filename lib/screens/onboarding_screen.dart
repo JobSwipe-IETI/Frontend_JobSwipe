@@ -366,6 +366,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           'nationality': _candidateNationality ?? _nationalityController.text.trim(),
           'phoneNumber': _phoneController.text.trim(),
           'languages': _selectedLanguages.join(', '),
+          'sector': _selectedIndustry ?? _industryController.text.trim(),
           'expectedSalary': _parseExpectedSalary(),
           'availability': _selectedAvailability ?? _availabilityController.text.trim(),
           'portfolioUrl': _firstPortfolioLink(),
@@ -591,6 +592,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         label: 'Ubicacion',
         validator: (v) => _optionalMax(v, field: 'Ubicacion', max: 120),
       ),
+      _dropdownField(
+        label: 'Sector *',
+        value: _selectedIndustry,
+        items: _industryOptions,
+        onChanged: (value) => setState(() {
+          _selectedIndustry = value;
+          _industryController.text = value ?? '';
+        }),
+        validator: (value) => value == null || value.isEmpty ? 'Selecciona un sector' : null,
+      ),
       _countryPickerField(
         label: 'Nacionalidad *',
         controller: _nationalityController,
@@ -651,6 +662,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return _displayNameController.text.trim().isNotEmpty ||
         _professionalTitleController.text.trim().isNotEmpty ||
         _summaryController.text.trim().isNotEmpty ||
+        _industryController.text.trim().isNotEmpty ||
         _candidateSkills.isNotEmpty ||
         _selectedLanguages.isNotEmpty ||
         _candidateExperiences.any(
@@ -822,49 +834,144 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _applyExtractedCandidateProfile(Map<String, dynamic> profile) {
+    final Map<String, dynamic> p =
+        profile['candidateProfile'] is Map<String, dynamic>
+        ? profile['candidateProfile'] as Map<String, dynamic>
+        : profile;
+
     setState(() {
       _displayNameController.text =
-          profile['displayName']?.toString() ??
-          profile['fullName']?.toString() ??
-          profile['name']?.toString() ??
+          p['displayName']?.toString() ??
+          p['fullName']?.toString() ??
+          p['name']?.toString() ??
           _displayNameController.text;
-      _professionalTitleController.text = profile['professionalTitle']?.toString() ?? _professionalTitleController.text;
-      _summaryController.text = profile['summary']?.toString() ?? _summaryController.text;
-      _locationController.text = profile['location']?.toString() ?? _locationController.text;
-      _nationalityController.text = profile['nationality']?.toString() ?? _nationalityController.text;
-      _candidateNationality = profile['nationality']?.toString() ?? _candidateNationality;
-      _phoneController.text = profile['phoneNumber']?.toString() ?? _phoneController.text;
-      _expectedSalaryController.text = profile['expectedSalary']?.toString() ?? _expectedSalaryController.text;
-      _availabilityController.text = profile['availability']?.toString() ?? _availabilityController.text;
-      _educationController.text = _formatEducationValue(profile['education']);
+      _professionalTitleController.text = p['professionalTitle']?.toString() ?? _professionalTitleController.text;
+      _summaryController.text = p['summary']?.toString() ?? _summaryController.text;
+      _locationController.text = p['location']?.toString() ?? _locationController.text;
+
+      final String? extractedSector = _normalizeExtractedSector(
+        p['sector']?.toString() ?? p['industry']?.toString(),
+      );
+      if (extractedSector != null) {
+        _selectedIndustry = extractedSector;
+        _industryController.text = extractedSector;
+      }
+
+      final String? extractedNationality = _normalizeExtractedNationality(
+        p['nationality']?.toString() ??
+            p['country']?.toString() ??
+            p['pais']?.toString(),
+      );
+      if (extractedNationality != null) {
+        _candidateNationality = extractedNationality;
+        _nationalityController.text = extractedNationality;
+      }
+
+      _phoneController.text = p['phoneNumber']?.toString() ?? _phoneController.text;
+      _expectedSalaryController.text = p['expectedSalary']?.toString() ?? _expectedSalaryController.text;
+      _availabilityController.text = p['availability']?.toString() ?? _availabilityController.text;
+      _educationController.text = _formatEducationValue(p['education']);
 
       _professionalLinks
         ..clear()
-        ..addAll(_extractProfessionalLinks(profile));
+        ..addAll(_extractProfessionalLinks(p));
 
       _candidateSkills
         ..clear()
-        ..addAll(_extractStringList(profile['skills']));
+        ..addAll(_extractStringList(p['skills']));
 
       _selectedLanguages
         ..clear()
-        ..addAll(_extractLanguages(profile['languages']));
+        ..addAll(_extractLanguages(p['languages']));
 
       _candidateExperiences
         ..clear()
-        ..addAll(_extractExperiences(profile['experience']));
+        ..addAll(_extractExperiences(p['experience']));
 
       if (_candidateExperiences.isEmpty) {
         _candidateExperiences.add(_ExperienceDraft());
       }
 
-      final String? extractedAvailability = profile['availability']?.toString();
+      final String? extractedAvailability = p['availability']?.toString();
       if (extractedAvailability != null && extractedAvailability.trim().isNotEmpty) {
         _selectedAvailability = _availabilityOptions.contains(extractedAvailability)
             ? extractedAvailability
             : null;
       }
     });
+  }
+
+  String? _normalizeExtractedSector(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) {
+      return null;
+    }
+
+    final lower = value.toLowerCase();
+    final Map<String, String> aliases = {
+      'tecnologia': 'Tecnologia',
+      'technology': 'Tecnologia',
+      'tech': 'Tecnologia',
+      'software': 'Tecnologia',
+      'finanzas': 'Finanzas',
+      'finance': 'Finanzas',
+      'salud': 'Salud',
+      'health': 'Salud',
+      'educacion': 'Educacion',
+      'education': 'Educacion',
+      'retail': 'Retail',
+      'logistica': 'Logistica',
+      'logistics': 'Logistica',
+      'marketing': 'Marketing',
+      'construccion': 'Construccion',
+      'construction': 'Construccion',
+      'energia': 'Energia',
+      'energy': 'Energia',
+      'servicios': 'Servicios',
+      'services': 'Servicios',
+      'telecomunicaciones': 'Telecomunicaciones',
+      'telecommunications': 'Telecomunicaciones',
+      'otro': 'Otro',
+      'other': 'Otro',
+    };
+
+    if (aliases.containsKey(lower)) {
+      return aliases[lower];
+    }
+
+    for (final option in _industryOptions) {
+      if (option.toLowerCase() == lower) {
+        return option;
+      }
+    }
+
+    return 'Otro';
+  }
+
+  String? _normalizeExtractedNationality(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) {
+      return null;
+    }
+
+    final lower = value.toLowerCase();
+    if (lower == 'colombian') {
+      return 'Colombia';
+    }
+    if (lower == 'mexican') {
+      return 'Mexico';
+    }
+    if (lower == 'argentinian') {
+      return 'Argentina';
+    }
+    if (lower == 'peruvian') {
+      return 'Peru';
+    }
+    if (lower == 'chilean') {
+      return 'Chile';
+    }
+
+    return value;
   }
 
   List<String> _extractProfessionalLinks(Map<String, dynamic> profile) {

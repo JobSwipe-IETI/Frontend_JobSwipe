@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import 'config/theme.dart';
 import 'screens/home_screen.dart';
@@ -160,6 +161,9 @@ class _AuthGateState extends State<AuthGate> {
       await _tokenStorage.saveToken(authSession.jwt);
 
       debugPrint('✅ Login successful: userId=${authSession.userId}, role=${authSession.role}');
+      if (kDebugMode) {
+        debugPrint('🔐 JWT_ACCESS_TOKEN=${authSession.jwt}');
+      }
 
       if (!mounted) {
         return;

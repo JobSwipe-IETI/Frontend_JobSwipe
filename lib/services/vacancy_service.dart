@@ -60,6 +60,7 @@ class VacancyFormData {
     required this.title,
     required this.description,
     required this.location,
+    required this.sector,
     required this.modality,
     required this.employmentType,
     required this.experienceLevel,
@@ -75,6 +76,7 @@ class VacancyFormData {
   final String title;
   final String description;
   final String location;
+  final String sector;
   final String modality;
   final String employmentType;
   final String experienceLevel;
@@ -90,6 +92,7 @@ class VacancyFormData {
         'title': title,
         'description': description,
         'location': location,
+        'sector': sector,
         'modality': modality,
         'employmentType': employmentType,
         'experienceLevel': experienceLevel,
