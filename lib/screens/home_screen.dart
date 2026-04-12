@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -13,6 +14,7 @@ import 'onboarding_screen.dart';
 import 'create_vacancy_screen.dart';
 import '../services/auth_service.dart';
 import '../services/profile_api_service.dart';
+import '../services/vacancy_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -39,7 +41,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   late AnimationController _animationController;
   late PageController _pageController;
   final ProfileApiService _profileApiService = ProfileApiService();
+  final VacancyService _vacancyService = VacancyService();
   late UserProvider _userProvider;
+  List<VacancyModel> _exploreVacancies = const [];
+  bool _isLoadingExplore = false;
+  String? _exploreError;
+  bool _showingFallbackVacancies = false;
+  int _exploreLoadingStep = 0;
+  int _exploreProgressPercent = 0;
+  String? _exploreBackendMessage;
+  Timer? _exploreLoadingTicker;
+  static const List<String> _exploreLoadingMessages = <String>[
+    'Cargando vacantes...',
+    'Organizando la informacion del perfil...',
+    'Buscando coincidencias para ti...',
+  ];
   bool get _isCompanyAccount => _userProvider.isCompany;
   bool get _isCandidateAccount => _userProvider.isCandidate;
 
@@ -100,6 +116,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     
     _loadPermissions();
     _loadUserProfile();
+    if (_isCandidateAccount) {
+      _loadRecommendedVacancies();
+    }
   }
 
   UserProfile _buildFallbackProfile(bool isCompany) {
@@ -242,12 +261,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   UserProfile _mapUserProfileFromBackend(Map<String, dynamic> json, bool isCompany) {
-    final String name = AuthService.extractNameFromJwt(widget.jwt) ?? _userProvider.currentUser.name;
-    final String email = AuthService.extractEmailFromJwt(widget.jwt) ?? _userProvider.currentUser.email;
-    final String avatarUrl = AuthService.extractAvatarUrlFromJwt(widget.jwt) ?? _userProvider.currentUser.profileImageUrl;
-
     final Map<String, dynamic>? candidate = json['candidateProfile'] as Map<String, dynamic>?;
     final Map<String, dynamic>? company = json['companyProfile'] as Map<String, dynamic>?;
+
+    final String name =
+        candidate?['displayName']?.toString() ??
+        candidate?['fullName']?.toString() ??
+        candidate?['name']?.toString() ??
+        company?['companyName']?.toString() ??
+        company?['name']?.toString() ??
+        json['displayName']?.toString() ??
+        json['fullName']?.toString() ??
+        json['name']?.toString() ??
+        _userProvider.currentUser.name;
+    final String email = AuthService.extractEmailFromJwt(widget.jwt) ?? _userProvider.currentUser.email;
+    final String avatarUrl = AuthService.extractAvatarUrlFromJwt(widget.jwt) ?? _userProvider.currentUser.profileImageUrl;
 
     return UserProfile(
       id: (widget.userId ?? AuthService.extractUserIdFromJwt(widget.jwt))?.toString() ?? _userProvider.currentUser.id,
@@ -286,6 +314,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   @override
   void dispose() {
+    _exploreLoadingTicker?.cancel();
     _pageController.dispose();
     _animationController.dispose();
     super.dispose();
@@ -340,70 +369,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildExplore() {
-    // Datos de muestra
-    final List<VacancyModel> sampleVacancies = [
-      VacancyModel(
-        id: 1,
-        title: 'Senior Frontend Developer',
-        company: 'Google',
-        location: 'Remoto',
-        salary: '\$120k - \$150k USD',
-        matchPercentage: 92,
-        badge: 'Mockup',
-        description:
-            'Buscamos un Senior Frontend Developer con experiencia en React y TypeScript. Trabajarás en productos que impactan a millones de usuarios.',
-        logo: Icons.business_rounded.toString(),
-      ),
-      VacancyModel(
-        id: 2,
-        title: 'Product Manager',
-        company: 'Meta',
-        location: '100% Remoto',
-        salary: '\$130k - \$180k USD',
-        matchPercentage: 88,
-        badge: 'Open',
-        description:
-            'Únete a nuestro equipo de Ingeniería de Meta para construir interfaces de próxima generación usando React y TypeScript. Trabajarás en productos que impactan a millones.',
-        logo: Icons.business_rounded.toString(),
-      ),
-      VacancyModel(
-        id: 3,
-        title: 'Full Stack Engineer',
-        company: 'Amazon',
-        location: 'Remoto',
-        salary: '\$100k - \$140k USD',
-        matchPercentage: 85,
-        badge: 'New',
-        description:
-            'Se requiere experiencia en backend con Node.js/Python y frontend con React. Trabajarás en sistemas distribuidos de alta escala.',
-        logo: Icons.business_rounded.toString(),
-      ),
-      VacancyModel(
-        id: 4,
-        title: 'DevOps Engineer',
-        company: 'Netflix',
-        location: 'Remoto',
-        salary: '\$110k - \$160k USD',
-        matchPercentage: 81,
-        badge: 'Hot',
-        description:
-            'Buscamos un DevOps Engineer experto en Kubernetes, Docker y AWS. Serás responsable de la infraestructura de millones de usuarios.',
-        logo: Icons.business_rounded.toString(),
-      ),
-      VacancyModel(
-        id: 5,
-        title: 'Data Scientist',
-        company: 'OpenAI',
-        location: 'San Francisco, USA',
-        salary: '\$140k - \$200k USD',
-        matchPercentage: 87,
-        badge: 'Premium',
-        description:
-            'Trabaja con modelos de IA de última generación. Necesitamos expertos en machine learning con experiencia en producción.',
-        logo: Icons.business_rounded.toString(),
-      ),
-    ];
-
     return Column(
       children: [
         // Header
@@ -420,33 +385,371 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         Expanded(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 32, 20, 20),
-            child: SwipeCardsStack(
-              vacancies: sampleVacancies,
-              onCardSwiped: (vacancy, result) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      result == SwipeResult.like
-                          ? '❤️ ${vacancy.title} guardado'
-                          : '✋ ${vacancy.title} rechazado',
-                    ),
-                    duration: const Duration(milliseconds: 1200),
-                  ),
-                );
-              },
-              onStackEmpty: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('No hay más vacantes disponibles 🎉'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              },
-            ),
+            child: _buildExploreBody(),
           ),
         ),
       ],
     );
+  }
+
+  Widget _buildExploreBody() {
+    if (_isCompanyAccount) {
+      return _buildCompanyExploreState();
+    }
+
+    if (_isLoadingExplore) {
+      return _buildExploreLoadingState();
+    }
+
+    if (_exploreError != null) {
+      return _buildExploreErrorState();
+    }
+
+    if (_exploreVacancies.isEmpty) {
+      return _buildExploreEmptyState();
+    }
+
+    return SwipeCardsStack(
+      vacancies: _exploreVacancies,
+      onCardSwiped: (vacancy, result) {
+        final SwipeDecision decision =
+          result == SwipeResult.like ? SwipeDecision.like : SwipeDecision.dislike;
+        unawaited(
+          _vacancyService
+              .registerSwipeDecision(
+                jwt: widget.jwt,
+                vacancyId: vacancy.id,
+                decision: decision,
+              )
+              .catchError((_) {
+                // Keep UX smooth if swipe persistence fails transiently.
+              }),
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result == SwipeResult.like
+                  ? '❤️ ${vacancy.title} guardado'
+                  : '✋ ${vacancy.title} rechazado',
+            ),
+            duration: const Duration(milliseconds: 900),
+          ),
+        );
+      },
+      onStackEmpty: _handleExploreStackEmpty,
+    );
+  }
+
+  Widget _buildCompanyExploreState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.apartment_rounded,
+            size: 60,
+            color: Colors.grey.shade400,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'El módulo de recomendaciones aplica para candidatos.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF475569),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExploreErrorState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.error_outline_rounded,
+            size: 56,
+            color: Colors.red.shade400,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _exploreError ?? 'No se pudieron cargar las vacantes.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 14),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _loadRecommendedVacancies,
+            child: const Text('Reintentar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExploreLoadingState() {
+    final String loadingMessage = (_exploreBackendMessage != null && _exploreBackendMessage!.isNotEmpty)
+        ? _exploreBackendMessage!
+        : _exploreLoadingMessages[_exploreLoadingStep % _exploreLoadingMessages.length];
+    final double progressValue = (_exploreProgressPercent.clamp(0, 100)) / 100;
+
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 220,
+            child: LinearProgressIndicator(
+              value: progressValue > 0 ? progressValue : null,
+              minHeight: 8,
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          const SizedBox(height: 16),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 350),
+            child: Text(
+              loadingMessage,
+              key: ValueKey<String>(loadingMessage),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF334155),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _exploreProgressPercent > 0
+                ? '$_exploreProgressPercent% completado'
+                : 'Iniciando...'
+                ,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF475569),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Esto puede tardar unos segundos mientras procesamos tus recomendadas.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _startExploreLoadingMessages() {
+    _exploreLoadingTicker?.cancel();
+    _exploreLoadingStep = 0;
+    _exploreProgressPercent = 0;
+    _exploreBackendMessage = null;
+    _exploreLoadingTicker = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!mounted || !_isLoadingExplore) {
+        return;
+      }
+      setState(() {
+        _exploreLoadingStep = (_exploreLoadingStep + 1) % _exploreLoadingMessages.length;
+      });
+    });
+  }
+
+  void _stopExploreLoadingMessages() {
+    _exploreLoadingTicker?.cancel();
+    _exploreLoadingTicker = null;
+    _exploreLoadingStep = 0;
+    _exploreProgressPercent = 0;
+    _exploreBackendMessage = null;
+  }
+
+  Widget _buildExploreEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.auto_awesome_rounded,
+            size: 56,
+            color: Colors.grey.shade400,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _showingFallbackVacancies
+                ? 'No hay más vacantes por ahora.'
+                : 'No hay recomendaciones disponibles todavía.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 15),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _loadRecommendedVacancies() async {
+    if (!_isCandidateAccount) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingExplore = true;
+      _exploreError = null;
+    });
+    _startExploreLoadingMessages();
+
+    try {
+      final String jobId = await _vacancyService.startRecommendedVacanciesJob(
+        jwt: widget.jwt,
+        minScore: 70,
+        limit: 20,
+      );
+
+      RecommendationJobStatus? status;
+      for (int i = 0; i < 120; i++) {
+        status = await _vacancyService.getRecommendedVacanciesJobStatus(
+          jwt: widget.jwt,
+          jobId: jobId,
+        );
+
+        if (mounted) {
+          setState(() {
+            _exploreProgressPercent = status!.progressPercent;
+            _exploreBackendMessage = status.message;
+          });
+        }
+
+        if (status.isCompleted) {
+          break;
+        }
+
+        if (status.isFailed) {
+          throw VacancyException(
+            (status.error != null && status.error!.isNotEmpty)
+                ? status.error!
+                : 'No se pudieron generar recomendaciones.',
+          );
+        }
+
+        await Future.delayed(const Duration(milliseconds: 1200));
+      }
+
+      if (status == null || !status.isCompleted) {
+        throw const VacancyException(
+          'Las recomendaciones estan tardando mas de lo esperado. Intenta nuevamente.',
+        );
+      }
+
+      final List<VacancyModel> recommended =
+          await _vacancyService.getRecommendedVacanciesJobResult(
+        jwt: widget.jwt,
+        jobId: jobId,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (recommended.isEmpty) {
+        await _loadFallbackVacancies(showTransitionMessage: false);
+        return;
+      }
+
+      setState(() {
+        _exploreVacancies = recommended;
+        _showingFallbackVacancies = false;
+        _isLoadingExplore = false;
+      });
+      _stopExploreLoadingMessages();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoadingExplore = false;
+        _exploreError = error.toString();
+      });
+      _stopExploreLoadingMessages();
+    }
+  }
+
+  Future<void> _loadFallbackVacancies({
+    required bool showTransitionMessage,
+  }) async {
+    if (!_isCandidateAccount) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingExplore = true;
+      _exploreError = null;
+    });
+    _startExploreLoadingMessages();
+
+    try {
+      final List<VacancyModel> fallback = await _vacancyService.getExploreVacancies(
+        jwt: widget.jwt,
+        limit: 20,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _exploreVacancies = fallback;
+        _showingFallbackVacancies = true;
+        _isLoadingExplore = false;
+      });
+      _stopExploreLoadingMessages();
+
+      if (showTransitionMessage) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Se acabaron tus recomendadas. Te mostramos más oportunidades.',
+            ),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoadingExplore = false;
+        _exploreError = error.toString();
+      });
+      _stopExploreLoadingMessages();
+    }
+  }
+
+  Future<void> _handleExploreStackEmpty() async {
+    if (_showingFallbackVacancies) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay más vacantes disponibles por ahora.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    await _loadFallbackVacancies(showTransitionMessage: true);
   }
 
   Widget _buildMatches() {
