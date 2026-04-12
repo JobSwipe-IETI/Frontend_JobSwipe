@@ -65,6 +65,20 @@ class _SwipeCardsStackState extends State<SwipeCardsStack>
   }
 
   @override
+  void didUpdateWidget(covariant SwipeCardsStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.vacancies != widget.vacancies) {
+      setState(() {
+        _remainingVacancies = List.from(widget.vacancies);
+      });
+      _swipeController.reset();
+      _exitAnimationController.reset();
+      _returnAnimationController.reset();
+      _isAnimating = false;
+    }
+  }
+
+  @override
   void dispose() {
     _swipeController.dispose();
     _exitAnimationController.dispose();
@@ -482,6 +496,7 @@ class _SwipeCardsStackState extends State<SwipeCardsStack>
                           _buildExitAnimation(
                             context,
                             SwipeCard(
+                              key: ValueKey<String>('swipe-card-${vacancy.id}'),
                               vacancy: vacancy,
                               dragOffset: _swipeController.dragOffset,
                               rotation: _swipeController.rotation,
@@ -498,6 +513,7 @@ class _SwipeCardsStackState extends State<SwipeCardsStack>
                           ? _buildExitAnimation(
                               context,
                               SwipeCard(
+                                key: ValueKey<String>('swipe-card-${vacancy.id}'),
                                 vacancy: vacancy,
                                 dragOffset: _swipeController.dragOffset,
                                 rotation: _swipeController.rotation,
@@ -510,6 +526,7 @@ class _SwipeCardsStackState extends State<SwipeCardsStack>
                               ),
                             )
                           : SwipeCard(
+                              key: ValueKey<String>('swipe-card-${vacancy.id}'),
                               vacancy: vacancy,
                               dragOffset: isOnTop ? _swipeController.dragOffset : Offset.zero,
                               rotation: isOnTop ? _swipeController.rotation : 0.0,
