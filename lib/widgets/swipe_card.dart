@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/vacancy_model.dart';
-import '../config/theme.dart';
 
 /// Widget que representa una tarjeta individual de vacante
 class SwipeCard extends StatelessWidget {

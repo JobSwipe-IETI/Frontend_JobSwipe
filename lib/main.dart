@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import 'config/theme.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'screens/splash_screen.dart';
 import 'services/auth_service.dart';
+import 'services/profile_api_service.dart';
 import 'services/secure_token_storage.dart';
 
 void main() {
@@ -59,11 +62,16 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   final AuthService _authService = AuthService();
+  final ProfileApiService _profileApiService = ProfileApiService();
   final SecureTokenStorage _tokenStorage = SecureTokenStorage();
 
   bool _isLoading = false;
   bool _isAuthenticated = false;
+  bool _requiresOnboarding = false;
   String? _jwt;
+  int? _userId;
+  String? _roleOverride;
+  Map<String, dynamic>? _profileSeed;
   String? _errorMessage;
 
   @override
@@ -78,9 +86,53 @@ class _AuthGateState extends State<AuthGate> {
       return;
     }
 
+    if (token == null || token.isEmpty) {
+      setState(() {
+        _isAuthenticated = false;
+        _requiresOnboarding = false;
+        _jwt = null;
+      });
+      return;
+    }
+
     setState(() {
-      _isAuthenticated = token != null && token.isNotEmpty;
+      _isLoading = true;
+    });
+
+    await _resolveProfileState(token);
+  }
+
+  Future<void> _resolveProfileState(String token) async {
+    await _resolveProfileStateForUser(token, AuthService.extractUserIdFromJwt(token));
+  }
+
+  Future<void> _resolveProfileStateForUser(String token, int? userId) async {
+    bool requiresOnboarding = true;
+
+    debugPrint('🔍 _resolveProfileStateForUser: userId=$userId');
+
+    if (userId != null) {
+      try {
+        final hasProfile = await _profileApiService.hasProfile(
+          jwt: token,
+          userId: userId,
+        );
+        debugPrint('✅ hasProfile check: $hasProfile for userId=$userId');
+        requiresOnboarding = !hasProfile;
+      } catch (e) {
+        debugPrint('❌ hasProfile error: $e');
+        requiresOnboarding = true;
+      }
+    } else {
+      debugPrint('❌ userId is null!');
+    }
+
+    setState(() {
+      _isLoading = false;
+      _isAuthenticated = true;
+      _requiresOnboarding = requiresOnboarding;
       _jwt = token;
+      _userId = userId;
     });
   }
 
@@ -88,11 +140,14 @@ class _AuthGateState extends State<AuthGate> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _requiresOnboarding = false;
+      _roleOverride = null;
+      _profileSeed = null;
     });
 
     try {
-      final String? jwt = await _authService.signInWithGoogleAndExchangeJwt();
-      if (jwt == null) {
+      final authSession = await _authService.signInWithGoogleAndExchangeJwt();
+      if (authSession == null) {
         if (!mounted) {
           return;
         }
@@ -103,17 +158,24 @@ class _AuthGateState extends State<AuthGate> {
         return;
       }
 
-      await _tokenStorage.saveToken(jwt);
+      await _tokenStorage.saveToken(authSession.jwt);
+
+      debugPrint('✅ Login successful: userId=${authSession.userId}, role=${authSession.role}');
+      if (kDebugMode) {
+        debugPrint('🔐 JWT_ACCESS_TOKEN=${authSession.jwt}');
+      }
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _isLoading = false;
-        _isAuthenticated = true;
-        _jwt = jwt;
+        _jwt = authSession.jwt;
+        _userId = authSession.userId;
+        _roleOverride = authSession.role;
       });
+
+      await _resolveProfileStateForUser(authSession.jwt, authSession.userId);
     } catch (error) {
       if (!mounted) {
         return;
@@ -135,8 +197,13 @@ class _AuthGateState extends State<AuthGate> {
     }
 
     setState(() {
+      _isLoading = false;
       _isAuthenticated = false;
+      _requiresOnboarding = false;
       _jwt = null;
+      _userId = null;
+      _roleOverride = null;
+      _profileSeed = null;
       _errorMessage = null;
     });
   }
@@ -144,7 +211,33 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     if (_isAuthenticated) {
-      return HomeScreen(onLogout: _logout, jwt: _jwt ?? '');
+      if (_requiresOnboarding) {
+        return OnboardingScreen(
+          jwt: _jwt ?? '',
+          userId: _userId,
+          onLogout: _logout,
+          onCompleted: (result) {
+            final String? newJwt = result['newJwt']?.toString();
+            setState(() {
+              _requiresOnboarding = false;
+              _roleOverride = result['role']?.toString();
+              if (newJwt != null) _jwt = newJwt;
+              _profileSeed = result;
+            });
+            if (newJwt != null) {
+              _tokenStorage.saveToken(newJwt);
+            }
+          },
+        );
+      }
+
+      return HomeScreen(
+        onLogout: _logout,
+        jwt: _jwt ?? '',
+        userId: _userId,
+        roleOverride: _roleOverride ?? AuthService.extractRoleFromJwt(_jwt ?? ''),
+        profileSeed: _profileSeed,
+      );
     }
 
     return LoginScreen(

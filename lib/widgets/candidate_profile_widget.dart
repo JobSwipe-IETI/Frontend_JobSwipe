@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../controllers/user_provider.dart';
 
@@ -7,10 +9,12 @@ class CandidateProfileWidget extends StatefulWidget {
     super.key,
     required this.userProvider,
     required this.onLogout,
+    required this.onEditProfile,
   });
 
   final UserProvider userProvider;
   final VoidCallback onLogout;
+  final VoidCallback onEditProfile;
 
   @override
   State<CandidateProfileWidget> createState() => _CandidateProfileWidgetState();
@@ -18,68 +22,56 @@ class CandidateProfileWidget extends StatefulWidget {
 
 class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
   bool _notificationsOn = true;
-  bool _editSkills = false;
-
-  static const List<String> _defaultSkills = [
-    'React',
-    'TypeScript',
-    'Node.js',
-    'GraphQL',
-    'CSS/Tailwind',
-    'Figma',
-    'Docker',
-    'Git',
-    'AWS',
-    'Python',
-  ];
-
-  final List<Map<String, String>> _experiences = const [
-    {
-      'title': 'Senior Developer',
-      'company': 'StartupCo',
-      'period': '2022 - Presente',
-      'color': '7C4DFF',
-    },
-    {
-      'title': 'Frontend Developer',
-      'company': 'TechAgency',
-      'period': '2020 - 2022',
-      'color': '00B4D8',
-    },
-    {
-      'title': 'Junior Developer',
-      'company': 'WebStudio',
-      'period': '2018 - 2020',
-      'color': '1A237E',
-    },
-  ];
-
-  final List<Map<String, String>> _education = const [
-    {
-      'degree': 'Ing. en Sistemas',
-      'school': 'Universidad Nacional',
-      'period': '2014 - 2018',
-    },
-    {
-      'degree': 'Bootcamp FullStack',
-      'school': 'Platzi Master',
-      'period': '2019',
-    },
-  ];
 
   final List<Map<String, String>> _stats = const [
-    {'label': 'Vistas', 'value': '148'},
-    {'label': 'Postulaciones', 'value': '23'},
-    {'label': 'Matches', 'value': '8'},
-    {'label': 'Score IA', 'value': '88%'},
+    {'label': 'Vistas', 'value': '0'},
+    {'label': 'Postulaciones', 'value': '0'},
+    {'label': 'Matches', 'value': '0'},
+    {'label': 'Score IA', 'value': '0%'},
   ];
 
-  late final List<String> _userSkills = List<String>.from(_defaultSkills);
+  late List<String> _userSkills;
 
-  void _removeSkill(String skill) {
-    setState(() {
-      _userSkills.remove(skill);
-    });
+  @override
+  void initState() {
+    super.initState();
+    _syncSkillsFromProfile();
+  }
+
+  @override
+  void didUpdateWidget(covariant CandidateProfileWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldSkills = oldWidget.userProvider.currentUser.skills;
+    final newSkills = widget.userProvider.currentUser.skills;
+    if (oldSkills != newSkills) {
+      _syncSkillsFromProfile();
+    }
+  }
+
+  void _syncSkillsFromProfile() {
+    final raw = widget.userProvider.currentUser.skills;
+    if (raw == null || raw.trim().isEmpty) {
+      _userSkills = [];
+      return;
+    }
+    _userSkills = _parseSkills(raw);
+  }
+
+  List<String> _parseSkills(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded.map((item) => item.toString()).toList();
+      }
+    } catch (_) {
+      // Fall back to comma-separated values below.
+    }
+
+    return raw
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
   }
 
   @override
@@ -108,6 +100,8 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
                     _buildExperienceCard(),
                     const SizedBox(height: 12),
                     _buildEducationCard(),
+                    const SizedBox(height: 12),
+                    _buildAdditionalInfoCard(),
                     const SizedBox(height: 12),
                     _buildSettingsCard(),
                     const SizedBox(height: 12),
@@ -156,17 +150,20 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
                 ),
               ),
               const Spacer(),
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.edit_rounded,
-                  color: Colors.white,
-                  size: 18,
+              GestureDetector(
+                onTap: widget.onEditProfile,
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.edit_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
                 ),
               ),
             ],
@@ -210,8 +207,8 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    const Text(
-                      'Senior Frontend Developer',
+                    Text(
+                      profile.professionalTitle ?? 'Senior Frontend Developer',
                       style: TextStyle(
                         color: Color(0xFFBFDBFE),
                         fontSize: 13,
@@ -242,7 +239,7 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
+            children: [
               Text(
                 'Completitud del perfil',
                 style: TextStyle(
@@ -253,7 +250,7 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
               ),
               Spacer(),
               Text(
-                '78%',
+                '${_getCompletionPercent(widget.userProvider.currentUser)}%',
                 style: TextStyle(
                   color: Color(0xFF7C4DFF),
                   fontSize: 13,
@@ -272,7 +269,10 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(999),
               child: TweenAnimationBuilder<double>(
-                tween: Tween<double>(begin: 0, end: 0.78),
+                tween: Tween<double>(
+                  begin: 0,
+                  end: _getCompletionPercent(widget.userProvider.currentUser) / 100,
+                ),
                 duration: const Duration(milliseconds: 950),
                 builder: (context, value, _) {
                   return Align(
@@ -293,13 +293,48 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Agrega tu experiencia laboral para llegar al 100%',
+          Text(
+            _getCompletionHint(widget.userProvider.currentUser),
             style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
           ),
         ],
       ),
     );
+  }
+
+  int _getCompletionPercent(dynamic profile) {
+    final fields = [
+      profile.name,
+      profile.professionalTitle,
+      profile.description,
+      profile.skills,
+      profile.experience,
+      profile.education,
+      profile.location,
+      profile.nationality,
+      profile.phoneNumber,
+      profile.languages,
+      profile.expectedSalary,
+      profile.availability,
+    ];
+
+    final filled = fields.where((value) {
+      if (value == null) return false;
+      if (value is num) return value > 0;
+      return value.toString().trim().isNotEmpty;
+    }).length;
+
+    return ((filled / fields.length) * 100).round();
+  }
+
+  String _getCompletionHint(dynamic profile) {
+    if ((profile.experience ?? '').toString().trim().isEmpty) {
+      return 'Agrega tu experiencia laboral para llegar al 100%';
+    }
+    if ((profile.skills ?? '').toString().trim().isEmpty) {
+      return 'Agrega tus habilidades para completar el perfil';
+    }
+    return 'Tu perfil ya está casi completo';
   }
 
   Widget _buildStatsGrid() {
@@ -356,9 +391,9 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
     return _card(
       child: Column(
         children: [
-          Row(
+          const Row(
             children: [
-              const Text(
+              Text(
                 'Habilidades',
                 style: TextStyle(
                   color: Color(0xFF263238),
@@ -366,37 +401,35 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
                   fontSize: 14,
                 ),
               ),
-              const Spacer(),
-              TextButton(
-                onPressed: () => setState(() => _editSkills = !_editSkills),
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF7C4DFF),
-                ),
-                child: Text(_editSkills ? 'Listo' : 'Editar'),
-              ),
             ],
           ),
           const SizedBox(height: 6),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                ..._userSkills.map((skill) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0EEFF),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
+          if (_userSkills.isEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Sin habilidades registradas',
+                style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+              ),
+            )
+          else
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _userSkills
+                    .map(
+                      (skill) => Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0EEFF),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
                           skill,
                           style: const TextStyle(
                             color: Color(0xFF7C4DFF),
@@ -404,61 +437,11 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (_editSkills)
-                          GestureDetector(
-                            onTap: () => _removeSkill(skill),
-                            child: const Padding(
-                              padding: EdgeInsets.only(left: 6),
-                              child: Text(
-                                '×',
-                                style: TextStyle(
-                                  color: Color(0xFF7C4DFF),
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  );
-                }),
-                if (_editSkills)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: const Color(0xFF7C4DFF),
-                        width: 1.5,
                       ),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.add_rounded,
-                          size: 13,
-                          color: Color(0xFF7C4DFF),
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          'Agregar',
-                          style: TextStyle(
-                            color: Color(0xFF7C4DFF),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
+                    )
+                    .toList(),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -480,12 +463,10 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
                   fontSize: 14,
                 ),
               ),
-              Spacer(),
-              Icon(Icons.add_rounded, color: Color(0xFF7C4DFF), size: 18),
             ],
           ),
           const SizedBox(height: 12),
-          ..._experiences.map(_experienceTile),
+          ..._buildExperienceItems().map(_experienceTile),
         ],
       ),
     );
@@ -507,15 +488,119 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
                   fontSize: 14,
                 ),
               ),
-              Spacer(),
-              Icon(Icons.add_rounded, color: Color(0xFF7C4DFF), size: 18),
             ],
           ),
           const SizedBox(height: 12),
-          ..._education.map(_educationTile),
+          ..._buildEducationItems().map(_educationTile),
         ],
       ),
     );
+  }
+
+  Widget _buildAdditionalInfoCard() {
+    final profile = widget.userProvider.currentUser;
+    final salary = profile.expectedSalary != null
+        ? 'USD ${profile.expectedSalary!.toStringAsFixed(0)}'
+        : 'No especificado';
+
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Información adicional',
+            style: TextStyle(
+              color: Color(0xFF263238),
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _infoRow('Resumen', profile.description),
+          _infoRow('Nacionalidad', profile.nationality ?? 'No especificado'),
+          _infoRow('Teléfono', profile.phoneNumber ?? 'No especificado'),
+          _infoRow('Sector', profile.industry ?? 'No especificado'),
+          _infoRow('Idiomas', profile.languages ?? 'No especificado'),
+          _infoRow('Salario esperado', salary),
+          _infoRow('Disponibilidad', profile.availability ?? 'No especificado'),
+          _infoRow('GitHub', profile.githubUrl ?? 'No especificado', isLink: true),
+          _infoRow('LinkedIn', profile.linkedinUrl ?? 'No especificado', isLink: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value, {bool isLink = false}) {
+    final canOpenLink = isLink && _tryBuildHttpUri(value) != null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 4,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 6,
+            child: canOpenLink
+                ? GestureDetector(
+                    onTap: () => _openUrl(value),
+                    child: Text(
+                      value,
+                      style: const TextStyle(
+                        color: Color(0xFF2563EB),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  )
+                : Text(
+                    value,
+                    style: const TextStyle(
+                      color: Color(0xFF263238),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Uri? _tryBuildHttpUri(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty || value == 'No especificado') {
+      return null;
+    }
+    final parsed = Uri.tryParse(value);
+    if (parsed == null) {
+      return null;
+    }
+    if (parsed.scheme == 'http' || parsed.scheme == 'https') {
+      return parsed;
+    }
+    final withHttps = Uri.tryParse('https://$value');
+    if (withHttps == null) {
+      return null;
+    }
+    return withHttps;
+  }
+
+  Future<void> _openUrl(String raw) async {
+    final uri = _tryBuildHttpUri(raw);
+    if (uri == null) {
+      return;
+    }
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   Widget _buildSettingsCard() {
@@ -553,7 +638,7 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
             trailing: Switch.adaptive(
               value: _notificationsOn,
               onChanged: (v) => setState(() => _notificationsOn = v),
-              activeColor: const Color(0xFF1A237E),
+              activeTrackColor: const Color(0xFF1A237E),
             ),
           ),
           _settingRow(icon: Icons.lock_rounded, label: 'Privacidad'),
@@ -635,6 +720,57 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
         ),
       ),
     );
+  }
+
+  List<Map<String, String>> _buildExperienceItems() {
+    final experience = widget.userProvider.currentUser.experience;
+    if (experience == null || experience.trim().isEmpty) {
+      return [];
+    }
+    try {
+      final decoded = jsonDecode(experience);
+      if (decoded is List) {
+        return decoded.map((item) {
+          final map = item as Map<String, dynamic>;
+          final startDate = map['startDate']?.toString() ?? '';
+          final endDate = map['endDate']?.toString();
+          final period = endDate == null || endDate.isEmpty
+              ? '$startDate - Actual'
+              : '$startDate - $endDate';
+          return {
+            'title': map['title']?.toString() ?? 'Experiencia',
+            'company': map['company']?.toString() ?? 'Empresa',
+            'period': period,
+            'color': '7C4DFF',
+          };
+        }).toList();
+      }
+    } catch (_) {
+      // Use legacy string below.
+    }
+
+    return [
+      {
+        'title': widget.userProvider.currentUser.professionalTitle ?? 'Experiencia profesional',
+        'company': widget.userProvider.currentUser.location ?? 'No especificada',
+        'period': experience,
+        'color': '7C4DFF',
+      },
+    ];
+  }
+
+  List<Map<String, String>> _buildEducationItems() {
+    final education = widget.userProvider.currentUser.education;
+    if (education == null || education.trim().isEmpty) {
+      return [];
+    }
+    return [
+      {
+        'degree': education,
+        'school': 'Formación registrada',
+        'period': 'Actual',
+      },
+    ];
   }
 
   Widget _experienceTile(Map<String, String> exp) {

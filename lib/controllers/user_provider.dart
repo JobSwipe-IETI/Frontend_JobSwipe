@@ -19,6 +19,12 @@ class UserProvider extends ChangeNotifier {
   /// Obtiene si el usuario actual es una empresa
   bool get isCompany => _currentUser.userType == UserType.company;
 
+  /// Reemplaza el perfil actual con datos cargados desde backend
+  void setUser(UserProfile user) {
+    _currentUser = user;
+    notifyListeners();
+  }
+
   /// Actualiza datos del perfil (nombre, descripción, etc)
   void updateProfile({
     required String name,
