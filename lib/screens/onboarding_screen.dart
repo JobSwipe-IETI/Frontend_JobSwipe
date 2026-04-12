@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl_phone_number_input/intl_phone_number_input.dart';
 
+import '../config/theme.dart';
 import '../models/user_profile.dart';
 import '../services/auth_service.dart';
 import '../services/profile_api_service.dart';
@@ -81,27 +82,33 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String? _selectedCvFileName;
 
   final TextEditingController _displayNameController = TextEditingController();
-  final TextEditingController _professionalTitleController = TextEditingController();
+  final TextEditingController _professionalTitleController =
+      TextEditingController();
   final TextEditingController _summaryController = TextEditingController();
   final TextEditingController _educationController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _nationalityController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _expectedSalaryController = TextEditingController();
+  final TextEditingController _expectedSalaryController =
+      TextEditingController();
   final TextEditingController _availabilityController = TextEditingController();
   final TextEditingController _linkInputController = TextEditingController();
 
   final TextEditingController _companyNameController = TextEditingController();
-  final TextEditingController _companyDescriptionController = TextEditingController();
+  final TextEditingController _companyDescriptionController =
+      TextEditingController();
   final TextEditingController _industryController = TextEditingController();
   final TextEditingController _companySizeController = TextEditingController();
   final TextEditingController _websiteController = TextEditingController();
   final TextEditingController _headquartersController = TextEditingController();
-  final TextEditingController _companyNationalityController = TextEditingController();
+  final TextEditingController _companyNationalityController =
+      TextEditingController();
   final TextEditingController _companyPhoneController = TextEditingController();
   final TextEditingController _legalIdController = TextEditingController();
-  final TextEditingController _hiringContactNameController = TextEditingController();
-  final TextEditingController _hiringContactEmailController = TextEditingController();
+  final TextEditingController _hiringContactNameController =
+      TextEditingController();
+  final TextEditingController _hiringContactEmailController =
+      TextEditingController();
 
   final TextEditingController _skillInputController = TextEditingController();
   final List<String> _candidateSkills = <String>[];
@@ -221,7 +228,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       );
 
     _companyNameController.text = profile.companyName ?? profile.name;
-    _companyDescriptionController.text = profile.companyDescription ?? profile.description;
+    _companyDescriptionController.text =
+        profile.companyDescription ?? profile.description;
     _industryController.text = profile.industry ?? '';
     _selectedIndustry = _industryOptions.contains(profile.industry)
         ? profile.industry
@@ -251,7 +259,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ..clear()
       ..addAll(_parseExperiences(profile.experience));
 
-    if (_candidateExperiences.isEmpty && _accountType == AccountType.candidate) {
+    if (_candidateExperiences.isEmpty &&
+        _accountType == AccountType.candidate) {
       _candidateExperiences.add(_ExperienceDraft());
     }
   }
@@ -324,7 +333,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             final _ExperienceDraft draft = _ExperienceDraft();
             draft.titleController.text = item['title']?.toString() ?? '';
             draft.companyController.text = item['company']?.toString() ?? '';
-            draft.startDateController.text = item['startDate']?.toString() ?? '';
+            draft.startDateController.text =
+                item['startDate']?.toString() ?? '';
             draft.endDateController.text = item['endDate']?.toString() ?? '';
             result.add(draft);
           }
@@ -340,7 +350,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       return;
     }
 
-    final int? userId = widget.userId ?? AuthService.extractUserIdFromJwt(widget.jwt);
+    final int? userId =
+        widget.userId ?? AuthService.extractUserIdFromJwt(widget.jwt);
     if (userId == null) {
       setState(() {
         _error = 'No se pudo identificar el usuario autenticado.';
@@ -363,12 +374,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           'experiences': _candidateExperiences.map((d) => d.toMap()).toList(),
           'education': _educationController.text.trim(),
           'location': _locationController.text.trim(),
-          'nationality': _candidateNationality ?? _nationalityController.text.trim(),
+          'nationality':
+              _candidateNationality ?? _nationalityController.text.trim(),
           'phoneNumber': _phoneController.text.trim(),
           'languages': _selectedLanguages.join(', '),
           'sector': _selectedIndustry ?? _industryController.text.trim(),
           'expectedSalary': _parseExpectedSalary(),
-          'availability': _selectedAvailability ?? _availabilityController.text.trim(),
+          'availability':
+              _selectedAvailability ?? _availabilityController.text.trim(),
           'portfolioUrl': _firstPortfolioLink(),
           'githubUrl': _firstLinkContaining('github.com'),
           'linkedinUrl': _firstLinkContaining('linkedin.com'),
@@ -396,10 +409,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           'companyDescription': _companyDescriptionController.text.trim(),
           'legalId': _legalIdController.text.trim(),
           'industry': _selectedIndustry ?? _industryController.text.trim(),
-          'companySize': _selectedCompanySize ?? _companySizeController.text.trim(),
+          'companySize':
+              _selectedCompanySize ?? _companySizeController.text.trim(),
           'website': _websiteController.text.trim(),
           'headquartersLocation': _headquartersController.text.trim(),
-          'nationality': _companyNationality ?? _companyNationalityController.text.trim(),
+          'nationality':
+              _companyNationality ?? _companyNationalityController.text.trim(),
           'phoneNumber': _companyPhoneController.text.trim(),
           'hiringContactName': _hiringContactNameController.text.trim(),
           'hiringContactEmail': _hiringContactEmailController.text.trim(),
@@ -440,71 +455,144 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Completa tu registro'),
+        backgroundColor: JobSwipeTheme.primaryBlue,
+        foregroundColor: Colors.white,
         actions: <Widget>[
           TextButton(
             onPressed: _isSubmitting ? null : widget.onLogout,
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+              disabledForegroundColor: Colors.white70,
+            ),
             child: const Text('Salir'),
           ),
         ],
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
+      body: Container(
+        decoration: BoxDecoration(gradient: JobSwipeTheme.softGradient),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                if (!widget.isEditing) ...<Widget>[
-                  const Text(
-                    'Que tipo de cuenta quieres usar?',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: _typeCard(
-                          type: AccountType.candidate,
-                          title: 'Candidato',
-                          subtitle: 'Busco trabajo',
-                          icon: Icons.person_rounded,
+                _buildHeaderCard(),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: JobSwipeTheme.borderColor),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: JobSwipeTheme.primaryBlue.withValues(
+                          alpha: 0.08,
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _typeCard(
-                          type: AccountType.company,
-                          title: 'Empresa',
-                          subtitle: 'Publico vacantes',
-                          icon: Icons.business_rounded,
-                        ),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                ],
-                if (_accountType == AccountType.candidate) ..._candidateFields(),
-                if (_accountType == AccountType.company) ..._companyFields(),
-                if (_error != null) ...<Widget>[
-                  const SizedBox(height: 12),
-                  Text(_error!, style: const TextStyle(color: Colors.red)),
-                ],
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: (_accountType == null ||
-                            _isSubmitting ||
-                            (_accountType == AccountType.candidate && !_isCandidateFormVisible))
-                        ? null
-                        : _submit,
-                    child: Text(
-                      _isSubmitting
-                          ? 'Guardando...'
-                          : widget.isEditing
-                              ? 'Guardar cambios'
-                              : 'Continuar',
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        if (!widget.isEditing) ...<Widget>[
+                          const Text(
+                            'Que tipo de cuenta quieres usar?',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: _typeCard(
+                                  type: AccountType.candidate,
+                                  title: 'Candidato',
+                                  subtitle: 'Busco trabajo',
+                                  icon: Icons.person_rounded,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _typeCard(
+                                  type: AccountType.company,
+                                  title: 'Empresa',
+                                  subtitle: 'Publico vacantes',
+                                  icon: Icons.business_rounded,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                        if (_accountType == AccountType.candidate)
+                          ..._candidateFields(),
+                        if (_accountType == AccountType.company)
+                          ..._companyFields(),
+                        if (_error != null) ...<Widget>[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: JobSwipeTheme.errorRed.withValues(
+                                alpha: 0.08,
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: JobSwipeTheme.errorRed.withValues(
+                                  alpha: 0.2,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              _error!,
+                              style: TextStyle(
+                                color: JobSwipeTheme.errorRed,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed:
+                                (_accountType == null ||
+                                    _isSubmitting ||
+                                    (_accountType == AccountType.candidate &&
+                                        !_isCandidateFormVisible))
+                                ? null
+                                : _submit,
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(54),
+                              backgroundColor: JobSwipeTheme.primaryBlue,
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor: JobSwipeTheme.primaryBlue
+                                  .withValues(alpha: 0.45),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              _isSubmitting
+                                  ? 'Guardando...'
+                                  : widget.isEditing
+                                  ? 'Guardar cambios'
+                                  : 'Continuar',
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -512,6 +600,61 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: JobSwipeTheme.primaryGradient,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: JobSwipeTheme.primaryBlue.withValues(alpha: 0.18),
+            blurRadius: 26,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.badge_rounded, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  widget.isEditing
+                      ? 'Actualiza tu perfil'
+                      : 'Completa tu perfil',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Usamos el mismo lenguaje visual del resto de la app para que el registro se vea integrado y limpio.',
+            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.35),
+          ),
+        ],
       ),
     );
   }
@@ -532,21 +675,51 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         }
       }),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          color: selected
+              ? JobSwipeTheme.primaryBlue.withValues(alpha: 0.06)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? const Color(0xFF2563EB) : Colors.grey.shade300,
-            width: selected ? 2 : 1,
+            color: selected
+                ? JobSwipeTheme.primaryBlue
+                : JobSwipeTheme.borderColor,
+            width: selected ? 1.6 : 1,
           ),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: selected
+                  ? JobSwipeTheme.primaryBlue.withValues(alpha: 0.12)
+                  : Colors.black.withValues(alpha: 0.03),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           children: <Widget>[
-            Icon(icon, color: const Color(0xFF2563EB)),
+            Icon(
+              icon,
+              color: selected
+                  ? JobSwipeTheme.primaryBlue
+                  : Colors.grey.shade600,
+            ),
             const SizedBox(height: 8),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: selected
+                    ? JobSwipeTheme.primaryBlue
+                    : const Color(0xFF0F172A),
+              ),
+            ),
             const SizedBox(height: 4),
-            Text(subtitle, style: const TextStyle(fontSize: 12)),
+            Text(
+              subtitle,
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
           ],
         ),
       ),
@@ -554,9 +727,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   List<Widget> _candidateFields() {
-    final List<Widget> widgets = <Widget>[
-      _buildCandidateStartCard(),
-    ];
+    final List<Widget> widgets = <Widget>[_buildCandidateStartCard()];
 
     if (!_isCandidateFormVisible) {
       return widgets;
@@ -566,18 +737,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _field(
         controller: _displayNameController,
         label: 'Nombre completo *',
-        validator: (v) => _requiredWithLength(v, field: 'Nombre completo', min: 2, max: 80),
+        validator: (v) =>
+            _requiredWithLength(v, field: 'Nombre completo', min: 2, max: 80),
       ),
       _field(
         controller: _professionalTitleController,
         label: 'Titulo profesional *',
-        validator: (v) => _requiredWithLength(v, field: 'Titulo profesional', min: 3, max: 120),
+        validator: (v) => _requiredWithLength(
+          v,
+          field: 'Titulo profesional',
+          min: 3,
+          max: 120,
+        ),
       ),
       _field(
         controller: _summaryController,
         label: 'Resumen *',
         maxLines: 3,
-        validator: (v) => _requiredWithLength(v, field: 'Resumen', min: 30, max: 1500),
+        validator: (v) =>
+            _requiredWithLength(v, field: 'Resumen', min: 30, max: 1500),
       ),
       _buildLinksEditor(),
       _buildSkillsEditor(),
@@ -600,7 +778,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           _selectedIndustry = value;
           _industryController.text = value ?? '';
         }),
-        validator: (value) => value == null || value.isEmpty ? 'Selecciona un sector' : null,
+        validator: (value) =>
+            value == null || value.isEmpty ? 'Selecciona un sector' : null,
       ),
       _countryPickerField(
         label: 'Nacionalidad *',
@@ -613,8 +792,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             _nationalityController.text = country.name;
           });
         },
-        validator: (value) =>
-            (value == null || value.trim().isEmpty) ? 'Nacionalidad es obligatoria' : null,
+        validator: (value) => (value == null || value.trim().isEmpty)
+            ? 'Nacionalidad es obligatoria'
+            : null,
       ),
       _internationalPhoneField(
         controller: _phoneController,
@@ -627,7 +807,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           if (text.isEmpty) {
             return null;
           }
-          return _candidatePhoneValid ? null : 'Telefono invalido para el pais seleccionado';
+          return _candidatePhoneValid
+              ? null
+              : 'Telefono invalido para el pais seleccionado';
         },
       ),
       _buildLanguagesCatalogEditor(),
@@ -647,7 +829,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         value: _selectedAvailability,
         items: _availabilityOptions,
         onChanged: (value) => setState(() => _selectedAvailability = value),
-        validator: (value) => value == null || value.isEmpty ? 'Selecciona disponibilidad' : null,
+        validator: (value) =>
+            value == null || value.isEmpty ? 'Selecciona disponibilidad' : null,
       ),
     ]);
 
@@ -679,18 +862,44 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       padding: const EdgeInsets.only(bottom: 12),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: JobSwipeTheme.borderColor),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: JobSwipeTheme.primaryBlue.withValues(alpha: 0.06),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            const Text(
-              'Comienza con tu hoja de vida',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+            Row(
+              children: <Widget>[
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: JobSwipeTheme.primaryBlue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.upload_file_rounded,
+                    color: JobSwipeTheme.primaryBlue,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Comienza con tu hoja de vida',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 6),
             Text(
@@ -707,7 +916,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.upload_file_rounded),
-              label: Text(_isExtractingCv ? 'Extrayendo CV...' : 'Subir hoja de vida (PDF)'),
+              label: Text(
+                _isExtractingCv
+                    ? 'Extrayendo CV...'
+                    : 'Subir hoja de vida (PDF)',
+              ),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
@@ -736,7 +949,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const Text('Links profesionales', style: TextStyle(fontWeight: FontWeight.w700)),
+        const Text(
+          'Links profesionales',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 8),
         Row(
           children: <Widget>[
@@ -744,15 +960,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: TextFormField(
                 controller: _linkInputController,
                 keyboardType: TextInputType.url,
-                decoration: const InputDecoration(
-                  labelText: 'Agregar link (GitHub, LinkedIn, portafolio)',
-                  border: OutlineInputBorder(),
+                decoration: _inputDecoration(
+                  label: 'Agregar link (GitHub, LinkedIn, portafolio)',
                 ),
                 onFieldSubmitted: (_) => _addLink(),
               ),
             ),
             const SizedBox(width: 8),
-            ElevatedButton(onPressed: _addLink, child: const Text('Agregar')),
+            ElevatedButton(
+              onPressed: _addLink,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: JobSwipeTheme.primaryBlue,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('Agregar'),
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -774,7 +1000,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   .map(
                     (link) => Chip(
                       label: Text(link),
-                      onDeleted: () => setState(() => _professionalLinks.remove(link)),
+                      onDeleted: () =>
+                          setState(() => _professionalLinks.remove(link)),
                     ),
                   )
                   .toList(),
@@ -812,10 +1039,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     });
 
     try {
-      final Map<String, dynamic> extracted = await _profileApi.extractCandidateProfileFromCv(
-        fileName: file.name,
-        fileBytes: bytes,
-      );
+      final Map<String, dynamic> extracted = await _profileApi
+          .extractCandidateProfileFromCv(fileName: file.name, fileBytes: bytes);
       _applyExtractedCandidateProfile(extracted);
       setState(() {
         _showCandidateManualForm = true;
@@ -845,9 +1070,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           p['fullName']?.toString() ??
           p['name']?.toString() ??
           _displayNameController.text;
-      _professionalTitleController.text = p['professionalTitle']?.toString() ?? _professionalTitleController.text;
-      _summaryController.text = p['summary']?.toString() ?? _summaryController.text;
-      _locationController.text = p['location']?.toString() ?? _locationController.text;
+      _professionalTitleController.text =
+          p['professionalTitle']?.toString() ??
+          _professionalTitleController.text;
+      _summaryController.text =
+          p['summary']?.toString() ?? _summaryController.text;
+      _locationController.text =
+          p['location']?.toString() ?? _locationController.text;
 
       final String? extractedSector = _normalizeExtractedSector(
         p['sector']?.toString() ?? p['industry']?.toString(),
@@ -867,9 +1096,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _nationalityController.text = extractedNationality;
       }
 
-      _phoneController.text = p['phoneNumber']?.toString() ?? _phoneController.text;
-      _expectedSalaryController.text = p['expectedSalary']?.toString() ?? _expectedSalaryController.text;
-      _availabilityController.text = p['availability']?.toString() ?? _availabilityController.text;
+      _phoneController.text =
+          p['phoneNumber']?.toString() ?? _phoneController.text;
+      _expectedSalaryController.text =
+          p['expectedSalary']?.toString() ?? _expectedSalaryController.text;
+      _availabilityController.text =
+          p['availability']?.toString() ?? _availabilityController.text;
       _educationController.text = _formatEducationValue(p['education']);
 
       _professionalLinks
@@ -893,8 +1125,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       }
 
       final String? extractedAvailability = p['availability']?.toString();
-      if (extractedAvailability != null && extractedAvailability.trim().isNotEmpty) {
-        _selectedAvailability = _availabilityOptions.contains(extractedAvailability)
+      if (extractedAvailability != null &&
+          extractedAvailability.trim().isNotEmpty) {
+        _selectedAvailability =
+            _availabilityOptions.contains(extractedAvailability)
             ? extractedAvailability
             : null;
       }
@@ -989,15 +1223,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       links.addAll(_extractStringList(value));
     }
 
-    return links.where((link) => _urlValidator(link, field: 'Link') == null).toList();
+    return links
+        .where((link) => _urlValidator(link, field: 'Link') == null)
+        .toList();
   }
 
   List<String> _extractLanguages(dynamic value) {
-    final mapped = _extractStringList(value)
-        .map(_normalizeLanguage)
-        .where((lang) => lang.isNotEmpty)
-        .toSet()
-        .toList();
+    final mapped = _extractStringList(
+      value,
+    ).map(_normalizeLanguage).where((lang) => lang.isNotEmpty).toSet().toList();
 
     return mapped.where((lang) => _languageOptions.contains(lang)).toList();
   }
@@ -1008,23 +1242,40 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       return '';
     }
 
-    if (value == 'es' || value == 'esp' || value == 'espanol' || value == 'español' || value == 'spanish') {
+    if (value == 'es' ||
+        value == 'esp' ||
+        value == 'espanol' ||
+        value == 'español' ||
+        value == 'spanish') {
       return 'Espanol';
     }
 
-    if (value == 'en' || value == 'eng' || value == 'ingles' || value == 'inglés' || value == 'english') {
+    if (value == 'en' ||
+        value == 'eng' ||
+        value == 'ingles' ||
+        value == 'inglés' ||
+        value == 'english') {
       return 'English';
     }
 
-    if (value == 'pt' || value == 'por' || value == 'portugues' || value == 'portuguese') {
+    if (value == 'pt' ||
+        value == 'por' ||
+        value == 'portugues' ||
+        value == 'portuguese') {
       return 'Portugues';
     }
 
-    if (value == 'fr' || value == 'french' || value == 'frances' || value == 'francés') {
+    if (value == 'fr' ||
+        value == 'french' ||
+        value == 'frances' ||
+        value == 'francés') {
       return 'Frances';
     }
 
-    if (value == 'de' || value == 'german' || value == 'aleman' || value == 'alemán') {
+    if (value == 'de' ||
+        value == 'german' ||
+        value == 'aleman' ||
+        value == 'alemán') {
       return 'Aleman';
     }
 
@@ -1071,8 +1322,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       }
 
       final _ExperienceDraft draft = _ExperienceDraft();
-      draft.titleController.text = item['role']?.toString() ?? item['title']?.toString() ?? '';
-      draft.companyController.text = item['company']?.toString() ?? item['project']?.toString() ?? '';
+      draft.titleController.text =
+          item['role']?.toString() ?? item['title']?.toString() ?? '';
+      draft.companyController.text =
+          item['company']?.toString() ?? item['project']?.toString() ?? '';
       draft.startDateController.text = _normalizeExperienceDate(
         item['start']?.toString() ?? item['startDate']?.toString(),
       );
@@ -1086,14 +1339,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return result;
   }
 
-  String _normalizeExperienceDate(String? raw, {bool allowEmptyForCurrent = false}) {
+  String _normalizeExperienceDate(
+    String? raw, {
+    bool allowEmptyForCurrent = false,
+  }) {
     final value = (raw ?? '').trim();
     if (value.isEmpty) {
       return '';
     }
 
     final lower = value.toLowerCase();
-    if (allowEmptyForCurrent && (lower == 'actual' || lower == 'present' || lower == 'current' || lower == 'hoy')) {
+    if (allowEmptyForCurrent &&
+        (lower == 'actual' ||
+            lower == 'present' ||
+            lower == 'current' ||
+            lower == 'hoy')) {
       return '';
     }
 
@@ -1121,7 +1381,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       return '$year-$month-01';
     }
 
-    final ddmmyyyy = RegExp(r'^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$').firstMatch(value);
+    final ddmmyyyy = RegExp(
+      r'^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$',
+    ).firstMatch(value);
     if (ddmmyyyy != null) {
       final day = int.parse(ddmmyyyy.group(1)!).toString().padLeft(2, '0');
       final month = int.parse(ddmmyyyy.group(2)!).toString().padLeft(2, '0');
@@ -1167,13 +1429,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _field(
         controller: _companyNameController,
         label: 'Nombre empresa *',
-        validator: (v) => _requiredWithLength(v, field: 'Nombre empresa', min: 2, max: 120),
+        validator: (v) =>
+            _requiredWithLength(v, field: 'Nombre empresa', min: 2, max: 120),
       ),
       _field(
         controller: _companyDescriptionController,
         label: 'Descripcion *',
         maxLines: 3,
-        validator: (v) => _requiredWithLength(v, field: 'Descripcion', min: 30, max: 2000),
+        validator: (v) =>
+            _requiredWithLength(v, field: 'Descripcion', min: 30, max: 2000),
       ),
       _dropdownField(
         label: 'Industria',
@@ -1183,7 +1447,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           _selectedIndustry = value;
           _industryController.text = value ?? '';
         }),
-        validator: (value) => value == null || value.isEmpty ? 'Selecciona la industria' : null,
+        validator: (value) =>
+            value == null || value.isEmpty ? 'Selecciona la industria' : null,
       ),
       _dropdownField(
         label: 'Tamano empresa',
@@ -1193,7 +1458,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           _selectedCompanySize = value;
           _companySizeController.text = value ?? '';
         }),
-        validator: (value) => value == null || value.isEmpty ? 'Selecciona el tamano de la empresa' : null,
+        validator: (value) => value == null || value.isEmpty
+            ? 'Selecciona el tamano de la empresa'
+            : null,
       ),
       _field(
         controller: _websiteController,
@@ -1217,7 +1484,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             _companyNationalityController.text = country.name;
           });
         },
-        validator: (value) => (value == null || value.trim().isEmpty) ? 'Pais/Nacionalidad es obligatorio' : null,
+        validator: (value) => (value == null || value.trim().isEmpty)
+            ? 'Pais/Nacionalidad es obligatorio'
+            : null,
       ),
       _internationalPhoneField(
         controller: _companyPhoneController,
@@ -1230,7 +1499,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           if (text.isEmpty) {
             return null;
           }
-          return _companyPhoneValid ? null : 'Telefono invalido para el pais seleccionado';
+          return _companyPhoneValid
+              ? null
+              : 'Telefono invalido para el pais seleccionado';
         },
       ),
       _field(
@@ -1241,7 +1512,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _field(
         controller: _hiringContactNameController,
         label: 'Nombre contacto contratacion',
-        validator: (v) => _optionalMax(v, field: 'Nombre contacto contratacion', max: 120),
+        validator: (v) =>
+            _optionalMax(v, field: 'Nombre contacto contratacion', max: 120),
       ),
       _field(
         controller: _hiringContactEmailController,
@@ -1256,22 +1528,33 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const Text('Habilidades', style: TextStyle(fontWeight: FontWeight.w700)),
+        const Text(
+          'Habilidades',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 8),
         Row(
           children: <Widget>[
             Expanded(
               child: TextFormField(
                 controller: _skillInputController,
-                decoration: const InputDecoration(
-                  labelText: 'Agregar habilidad',
-                  border: OutlineInputBorder(),
-                ),
+                decoration: _inputDecoration(label: 'Agregar habilidad'),
                 onFieldSubmitted: (_) => _addSkill(),
               ),
             ),
             const SizedBox(width: 8),
-            ElevatedButton(onPressed: _addSkill, child: const Text('Agregar')),
+            ElevatedButton(
+              onPressed: _addSkill,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: JobSwipeTheme.primaryBlue,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('Agregar'),
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -1281,10 +1564,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             spacing: 6,
             runSpacing: 6,
             children: _candidateSkills
-                .map((skill) => Chip(
-                      label: Text(skill),
-                      onDeleted: () => setState(() => _candidateSkills.remove(skill)),
-                    ))
+                .map(
+                  (skill) => Chip(
+                    label: Text(
+                      skill,
+                      style: TextStyle(
+                        color: JobSwipeTheme.primaryBlue,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    backgroundColor: JobSwipeTheme.primaryBlue.withValues(
+                      alpha: 0.1,
+                    ),
+                    deleteIconColor: JobSwipeTheme.primaryBlue,
+                    onDeleted: () =>
+                        setState(() => _candidateSkills.remove(skill)),
+                  ),
+                )
                 .toList(),
           ),
         ),
@@ -1301,11 +1597,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const Text('Idiomas', style: TextStyle(fontWeight: FontWeight.w700)),
+        const Text('Idiomas', style: TextStyle(fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           key: ValueKey<String>('lang-${_selectedLanguages.join('|')}'),
-          initialValue: availableLanguages.contains(_languageToAdd) ? _languageToAdd : null,
+          initialValue: availableLanguages.contains(_languageToAdd)
+              ? _languageToAdd
+              : null,
           items: availableLanguages
               .map(
                 (language) => DropdownMenuItem<String>(
@@ -1326,10 +1624,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               _languageToAdd = null;
             });
           },
-          decoration: const InputDecoration(
-            labelText: 'Agregar idioma del catalogo',
-            border: OutlineInputBorder(),
-          ),
+          decoration: _inputDecoration(label: 'Agregar idioma del catalogo'),
         ),
         const SizedBox(height: 8),
         if (_selectedLanguages.isEmpty)
@@ -1349,8 +1644,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               children: _selectedLanguages
                   .map(
                     (language) => Chip(
-                      label: Text(language),
-                      onDeleted: () => setState(() => _selectedLanguages.remove(language)),
+                      label: Text(
+                        language,
+                        style: TextStyle(
+                          color: JobSwipeTheme.primaryBlue,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      backgroundColor: JobSwipeTheme.primaryBlue.withValues(
+                        alpha: 0.1,
+                      ),
+                      deleteIconColor: JobSwipeTheme.primaryBlue,
+                      onDeleted: () =>
+                          setState(() => _selectedLanguages.remove(language)),
                     ),
                   )
                   .toList(),
@@ -1367,7 +1673,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       children: <Widget>[
         Row(
           children: <Widget>[
-            const Text('Experiencia', style: TextStyle(fontWeight: FontWeight.w700)),
+            const Text(
+              'Experiencia',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
             const Spacer(),
             TextButton.icon(
               onPressed: _addExperienceDraft,
@@ -1383,23 +1692,36 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: JobSwipeTheme.borderColor),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: JobSwipeTheme.primaryBlue.withValues(alpha: 0.05),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: Column(
                 children: <Widget>[
                   _field(controller: draft.titleController, label: 'Cargo *'),
-                  _field(controller: draft.companyController, label: 'Empresa *'),
+                  _field(
+                    controller: draft.companyController,
+                    label: 'Empresa *',
+                  ),
                   Row(
                     children: <Widget>[
                       Expanded(
                         child: _dateField(
                           controller: draft.startDateController,
                           label: 'Fecha inicio *',
-                          onTap: () => _pickExperienceDate(draft, isStart: true),
-                          validator: (v) => _validateExperienceDate(draft, v, isStart: true),
+                          onTap: () =>
+                              _pickExperienceDate(draft, isStart: true),
+                          validator: (v) =>
+                              _validateExperienceDate(draft, v, isStart: true),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -1407,8 +1729,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         child: _dateField(
                           controller: draft.endDateController,
                           label: 'Fecha fin / Actual',
-                          onTap: () => _pickExperienceDate(draft, isStart: false),
-                          validator: (v) => _validateExperienceDate(draft, v, isStart: false),
+                          onTap: () =>
+                              _pickExperienceDate(draft, isStart: false),
+                          validator: (v) =>
+                              _validateExperienceDate(draft, v, isStart: false),
                         ),
                       ),
                     ],
@@ -1417,6 +1741,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: () => _removeExperienceDraft(index),
+                      style: TextButton.styleFrom(
+                        foregroundColor: JobSwipeTheme.errorRed,
+                      ),
                       child: const Text('Eliminar'),
                     ),
                   ),
@@ -1438,7 +1765,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Future<void> _pickExperienceDate(_ExperienceDraft draft, {required bool isStart}) async {
+  Future<void> _pickExperienceDate(
+    _ExperienceDraft draft, {
+    required bool isStart,
+  }) async {
     final DateTime now = DateTime.now();
     final String raw = isStart
         ? draft.startDateController.text.trim()
@@ -1459,7 +1789,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() {
       if (isStart) {
         draft.startDateController.text = _formatDate(picked);
-        final DateTime? endDate = DateTime.tryParse(draft.endDateController.text.trim());
+        final DateTime? endDate = DateTime.tryParse(
+          draft.endDateController.text.trim(),
+        );
         if (endDate != null && endDate.isBefore(picked)) {
           draft.endDateController.clear();
         }
@@ -1487,14 +1819,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       if (text.isEmpty) {
         return 'La fecha de inicio es obligatoria';
       }
-      return DateTime.tryParse(text) == null ? 'Selecciona una fecha valida' : null;
+      return DateTime.tryParse(text) == null
+          ? 'Selecciona una fecha valida'
+          : null;
     }
 
     if (text.isEmpty) {
       return null;
     }
 
-    final DateTime? start = DateTime.tryParse(draft.startDateController.text.trim());
+    final DateTime? start = DateTime.tryParse(
+      draft.startDateController.text.trim(),
+    );
     final DateTime? end = DateTime.tryParse(text);
     if (end == null) {
       return 'Selecciona una fecha valida';
@@ -1528,15 +1864,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         readOnly: readOnly,
         keyboardType: keyboardType,
         inputFormatters: inputFormatters,
-        decoration: InputDecoration(
-          labelText: label,
+        decoration: _inputDecoration(
+          label: label,
           suffixText: suffixText,
           suffixIcon: suffixIcon,
-          border: const OutlineInputBorder(),
         ),
         onTap: onTap,
         onChanged: onChanged,
-        validator: validator ??
+        validator:
+            validator ??
             (isRequired
                 ? (value) {
                     if (value == null || value.trim().isEmpty) {
@@ -1583,10 +1919,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           useBottomSheetSafeArea: true,
         ),
         autoValidateMode: AutovalidateMode.onUserInteraction,
-        inputDecoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-        ),
+        inputDecoration: _inputDecoration(label: label),
         formatInput: false,
         keyboardType: const TextInputType.numberWithOptions(signed: false),
         onInputChanged: (PhoneNumber number) {
@@ -1613,14 +1946,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: DropdownButtonFormField<String>(
         initialValue: (value == null || value.isEmpty) ? null : value,
         items: items
-            .map((item) => DropdownMenuItem<String>(value: item, child: Text(item)))
+            .map(
+              (item) =>
+                  DropdownMenuItem<String>(value: item, child: Text(item)),
+            )
             .toList(),
         onChanged: items.isEmpty ? null : onChanged,
         validator: validator,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-        ),
+        decoration: _inputDecoration(label: label),
       ),
     );
   }
@@ -1638,9 +1971,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: TextFormField(
         readOnly: true,
         controller: controller,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
+        decoration: _inputDecoration(
+          label: label,
           suffixIcon: const Icon(Icons.arrow_drop_down_rounded),
         ),
         validator: validator,
@@ -1674,7 +2006,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return null;
   }
 
-  String? _optionalMax(String? value, {required String field, required int max}) {
+  String? _optionalMax(
+    String? value, {
+    required String field,
+    required int max,
+  }) {
     final String text = value?.trim() ?? '';
     if (text.isEmpty) {
       return null;
@@ -1683,6 +2019,41 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       return '$field no puede superar $max caracteres';
     }
     return null;
+  }
+
+  InputDecoration _inputDecoration({
+    required String label,
+    String? suffixText,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      suffixText: suffixText,
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: JobSwipeTheme.primaryBlue, width: 1.8),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFEF4444)),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.8),
+      ),
+    );
   }
 
   String? _salaryValidator(String? value) {
