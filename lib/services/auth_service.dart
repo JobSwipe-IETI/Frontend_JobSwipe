@@ -14,9 +14,9 @@ class AuthService {
           googleSignIn ??
           GoogleSignIn(
             scopes: const <String>['email', 'profile'],
-            // On Android, rely on native OAuth app config and only send
-            // serverClientId to request an ID token for backend validation.
-            clientId: kIsWeb ? AppConfig.googleWebClientId : null,
+            clientId: !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+                ? AppConfig.googleAndroidClientId
+                : AppConfig.googleWebClientId,
             serverClientId: AppConfig.googleWebClientId,
           ),
       _client = client ?? http.Client();
