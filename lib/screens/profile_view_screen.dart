@@ -1,25 +1,20 @@
 import 'package:flutter/material.dart';
 
-import '../config/theme.dart';
-
 class ProfileViewScreen extends StatelessWidget {
-  const ProfileViewScreen({
-    super.key,
-    required this.onLogout,
-  });
+  const ProfileViewScreen({super.key, required this.onLogout});
 
   final VoidCallback onLogout;
 
   Future<void> _showLogoutDialog(BuildContext context) async {
-    final bool? shouldLogout = await showDialog<bool>(
+    final shouldLogout = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          title: const Text('Cerrar sesión'),
-          content: const Text('¿Seguro que deseas cerrar sesión?'),
+          title: const Text('Cerrar sesion'),
+          content: const Text('Seguro que deseas cerrar sesion?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -31,7 +26,7 @@ class ProfileViewScreen extends StatelessWidget {
                 backgroundColor: const Color(0xFFEF4444),
                 foregroundColor: Colors.white,
               ),
-              child: const Text('Cerrar sesión'),
+              child: const Text('Cerrar sesion'),
             ),
           ],
         );
@@ -45,76 +40,92 @@ class ProfileViewScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const stats = [
+      {'label': 'Vistas', 'value': '148'},
+      {'label': 'Postulaciones', 'value': '23'},
+      {'label': 'Matches', 'value': '8'},
+      {'label': 'Score IA', 'value': '88%'},
+    ];
+
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              JobSwipeTheme.primaryIndigo.withOpacity(0.04),
-              const Color(0xFF1E3A8A).withOpacity(0.02),
-              Colors.white,
-            ],
-            stops: const [0, 0.5, 1],
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: JobSwipeTheme.primaryIndigo,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Mi perfil',
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF6366F1),
-                        letterSpacing: -0.4,
-                      ),
-                    ),
-                  ],
+      backgroundColor: const Color(0xFFF5F5F7),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 32),
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 56, 16, 52),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF1A237E), Color(0xFF7C4DFF)],
                 ),
-                const SizedBox(height: 24),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: JobSwipeTheme.primaryIndigo.withOpacity(0.1),
-                        blurRadius: 16,
-                        offset: const Offset(0, 6),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.white.withValues(alpha: 0.18),
+                        ),
+                        icon: const Icon(
+                          Icons.arrow_back_rounded,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Mi Perfil',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.edit_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
                       ),
                     ],
                   ),
-                  child: Row(
+                  const SizedBox(height: 16),
+                  Row(
                     children: [
                       Container(
-                        width: 72,
-                        height: 72,
+                        width: 64,
+                        height: 64,
                         decoration: BoxDecoration(
-                          gradient: JobSwipeTheme.primaryGradient,
                           borderRadius: BorderRadius.circular(18),
+                          color: Colors.white.withValues(alpha: 0.22),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.5),
+                            width: 2,
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.person_rounded,
-                          size: 42,
-                          color: Colors.white,
+                        child: const Center(
+                          child: Text(
+                            'MR',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 22,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -125,16 +136,24 @@ class ProfileViewScreen extends StatelessWidget {
                             Text(
                               'Mariana Rojas',
                               style: TextStyle(
-                                fontSize: 19,
+                                color: Colors.white,
+                                fontSize: 17,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
                             SizedBox(height: 2),
                             Text(
-                              'Frontend Developer',
+                              'Senior Frontend Developer',
                               style: TextStyle(
-                                color: Color(0xFF64748B),
-                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFBFDBFE),
+                                fontSize: 13,
+                              ),
+                            ),
+                            Text(
+                              '📍 Bogota, Colombia',
+                              style: TextStyle(
+                                color: Color(0xFF93C5FD),
+                                fontSize: 12,
                               ),
                             ),
                           ],
@@ -142,113 +161,272 @@ class ProfileViewScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 22),
-                _ProfileInfoCard(
-                  title: 'Información profesional',
-                  items: const [
-                    _ProfileInfoItem(label: 'Correo', value: 'mariana@gmail.com'),
-                    _ProfileInfoItem(label: 'Ubicación', value: 'Bogotá, Colombia'),
-                    _ProfileInfoItem(label: 'Experiencia', value: '4 años'),
-                    _ProfileInfoItem(label: 'Modalidad preferida', value: 'Remoto'),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _ProfileInfoCard(
-                  title: 'Habilidades destacadas',
-                  items: const [
-                    _ProfileInfoItem(label: 'Stack principal', value: 'Flutter, Dart, Firebase'),
-                    _ProfileInfoItem(label: 'Idioma', value: 'Español / Inglés B2'),
-                    _ProfileInfoItem(label: 'Disponibilidad', value: 'Inmediata'),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _showLogoutDialog(context),
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text(
-                      'Cerrar sesión',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFEF4444),
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size.fromHeight(54),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                ],
+              ),
+            ),
+            Transform.translate(
+              offset: const Offset(0, -28),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  children: [
+                    _card(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: const [
+                              Text(
+                                'Completitud del perfil',
+                                style: TextStyle(
+                                  color: Color(0xFF263238),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Spacer(),
+                              Text(
+                                '78%',
+                                style: TextStyle(
+                                  color: Color(0xFF7C4DFF),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(999),
+                              child: TweenAnimationBuilder<double>(
+                                tween: Tween<double>(begin: 0, end: 0.78),
+                                duration: const Duration(milliseconds: 950),
+                                builder: (context, value, _) {
+                                  return Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: FractionallySizedBox(
+                                      widthFactor: value,
+                                      child: Container(
+                                        decoration: const BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              Color(0xFF7C4DFF),
+                                              Color(0xFF00B4D8),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                    GridView.builder(
+                      itemCount: stats.length,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            childAspectRatio: 0.92,
+                            crossAxisSpacing: 8,
+                            mainAxisSpacing: 8,
+                          ),
+                      itemBuilder: (context, index) {
+                        final stat = stats[index];
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x0F000000),
+                                blurRadius: 12,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                stat['value']!,
+                                style: const TextStyle(
+                                  color: Color(0xFF263238),
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                stat['label']!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Color(0xFF94A3B8),
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _card(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'Informacion profesional',
+                            style: TextStyle(
+                              color: Color(0xFF263238),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          SizedBox(height: 10),
+                          _LineItem(
+                            label: 'Correo',
+                            value: 'mariana@gmail.com',
+                          ),
+                          _LineItem(
+                            label: 'Ubicacion',
+                            value: 'Bogota, Colombia',
+                          ),
+                          _LineItem(label: 'Experiencia', value: '4 anos'),
+                          _LineItem(
+                            label: 'Modalidad preferida',
+                            value: 'Remoto',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _card(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'Habilidades destacadas',
+                            style: TextStyle(
+                              color: Color(0xFF263238),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          SizedBox(height: 10),
+                          _LineItem(
+                            label: 'Stack principal',
+                            value: 'Flutter, Dart, Firebase',
+                          ),
+                          _LineItem(
+                            label: 'Idioma',
+                            value: 'Espanol / Ingles B2',
+                          ),
+                          _LineItem(
+                            label: 'Disponibilidad',
+                            value: 'Inmediata',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showLogoutDialog(context),
+                        icon: const Icon(Icons.logout_rounded),
+                        label: const Text(
+                          'Cerrar sesion',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          elevation: 0,
+                          backgroundColor: const Color(0xFFFFF5F5),
+                          foregroundColor: const Color(0xFFD32F2F),
+                          minimumSize: const Size.fromHeight(54),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
-}
 
-class _ProfileInfoCard extends StatelessWidget {
-  const _ProfileInfoCard({
-    required this.title,
-    required this.items,
-  });
-
-  final String title;
-  final List<_ProfileInfoItem> items;
-
-  @override
-  Widget build(BuildContext context) {
+  static Widget _card({required Widget child}) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0F000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: child,
+    );
+  }
+}
+
+class _LineItem extends StatelessWidget {
+  const _LineItem({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF6366F1),
+          Expanded(
+            flex: 4,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
             ),
           ),
-          const SizedBox(height: 12),
-          ...items.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 4,
-                    child: Text(
-                      item.label,
-                      style: const TextStyle(
-                        color: Color(0xFF64748B),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    flex: 6,
-                    child: Text(
-                      item.value,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
+          Expanded(
+            flex: 6,
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: Color(0xFF263238),
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
               ),
             ),
           ),
@@ -256,11 +434,4 @@ class _ProfileInfoCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _ProfileInfoItem {
-  const _ProfileInfoItem({required this.label, required this.value});
-
-  final String label;
-  final String value;
 }

@@ -1,0 +1,53 @@
+/// Modelo de datos para una vacante
+class VacancyModel {
+  final int id;
+  final String title;
+  final String company;
+  final String location;
+  final String salary;
+  final double matchPercentage;
+  final String badge;
+  final String description;
+  final String logo;
+  final bool isActive;
+
+  VacancyModel({
+    required this.id,
+    required this.title,
+    required this.company,
+    required this.location,
+    required this.salary,
+    required this.matchPercentage,
+    required this.badge,
+    required this.description,
+    required this.logo,
+    this.isActive = true,
+  });
+
+  /// Crea una copia con valores modificados
+  VacancyModel copyWith({
+    int? id,
+    String? title,
+    String? company,
+    String? location,
+    String? salary,
+    double? matchPercentage,
+    String? badge,
+    String? description,
+    String? logo,
+    bool? isActive,
+  }) {
+    return VacancyModel(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      company: company ?? this.company,
+      location: location ?? this.location,
+      salary: salary ?? this.salary,
+      matchPercentage: matchPercentage ?? this.matchPercentage,
+      badge: badge ?? this.badge,
+      description: description ?? this.description,
+      logo: logo ?? this.logo,
+      isActive: isActive ?? this.isActive,
+    );
+  }
+}

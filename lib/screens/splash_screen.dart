@@ -14,166 +14,89 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
+  late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
-  late Animation<Offset> _slideAnimation;
+  late Animation<double> _slideAnimation;
 
   @override
   void initState() {
     super.initState();
     _setupAnimations();
-    _navigateToApp();
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        widget.onSplashComplete();
+      }
+    });
   }
 
   void _setupAnimations() {
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 2200),
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 2000),
       vsync: this,
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
+      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.65, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+    _scaleAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
     );
 
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.4), end: Offset.zero).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+    _slideAnimation = Tween<double>(begin: 50, end: 0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
     );
 
-    _animationController.forward();
-  }
-
-  Future<void> _navigateToApp() async {
-    await Future.delayed(const Duration(seconds: 3));
-    if (mounted) {
-      widget.onSplashComplete();
-    }
+    _controller.forward();
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFFFF),
       body: Container(
+        width: double.infinity,
+        height: double.infinity,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF6366F1).withOpacity(0.08),
-              const Color(0xFF1E3A8A).withOpacity(0.05),
-              Colors.white,
+              const Color(0xFF0A1E5E),
+              const Color(0xFF0D47A1),
+              const Color(0xFF1565C0),
+              const Color(0xFF1976D2),
+              const Color(0xFF2196F3),
+              const Color(0xFF42A5F5),
             ],
+            stops: const [0.0, 0.15, 0.35, 0.55, 0.75, 1.0],
           ),
         ),
-        child: Column(
-          children: <Widget>[
-            Expanded(
-              child: Center(
+        child: Stack(
+          children: [
+            // Efectos de fondo animados
+            Positioned(
+              top: -100,
+              right: -100,
+              child: FadeTransition(
+                opacity: _fadeAnimation,
                 child: ScaleTransition(
                   scale: _scaleAnimation,
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: SlideTransition(
-                      position: _slideAnimation,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: <Widget>[
-                          // Logo con degradado de sombra
-                          Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  const Color(0xFF6366F1).withOpacity(0.3),
-                                  const Color(0xFF1E3A8A).withOpacity(0.2),
-                                ],
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF6366F1)
-                                      .withOpacity(0.3),
-                                  blurRadius: 40,
-                                  spreadRadius: 10,
-                                ),
-                                BoxShadow(
-                                  color: const Color(0xFF1E3A8A)
-                                      .withOpacity(0.2),
-                                  blurRadius: 25,
-                                  spreadRadius: 5,
-                                ),
-                              ],
-                            ),
-                            child: Image.asset(
-                              'assets/images/logoswipe.png',
-                              height: 180,
-                              width: 180,
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                          const SizedBox(height: 40),
-                          // Título con gradiente
-                          ShaderMask(
-                            shaderCallback: (bounds) =>
-                                LinearGradient(
-                                  colors: [
-                                    const Color(0xFF6366F1),
-                                    const Color(0xFF1E3A8A),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ).createShader(bounds),
-                            child: RichText(
-                              textAlign: TextAlign.center,
-                              text: const TextSpan(
-                                children: <TextSpan>[
-                                  TextSpan(
-                                    text: 'JobSwipe ',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 40,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: -0.5,
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: 'AI',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 40,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: -0.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Tu futuro laboral comienza aquí',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: const Color(0xFF1E3A8A)
-                                  .withOpacity(0.7),
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
+                  child: Container(
+                    width: 400,
+                    height: 400,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          Colors.white.withOpacity(0.1),
+                          Colors.white.withOpacity(0.01),
                         ],
                       ),
                     ),
@@ -181,34 +104,195 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
               ),
             ),
-            // Loading indicator en la parte inferior
-            FadeTransition(
-              opacity: _fadeAnimation,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 80),
-                child: Column(
-                  children: <Widget>[
-                    SizedBox(
-                      width: 50,
-                      height: 50,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 3.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          const Color(0xFF6366F1),
+            Positioned(
+              bottom: -150,
+              left: -150,
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: ScaleTransition(
+                  scale: _scaleAnimation,
+                  child: Container(
+                    width: 500,
+                    height: 500,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          Colors.cyan.withOpacity(0.08),
+                          Colors.cyan.withOpacity(0.01),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            
+            // Contenido principal
+            Center(
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: ScaleTransition(
+                  scale: _scaleAnimation,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Logo animado
+                      Container(
+                        width: 220,
+                        height: 220,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF42A5F5).withOpacity(0.6),
+                              blurRadius: 80,
+                              spreadRadius: 30,
+                              offset: const Offset(0, 20),
+                            ),
+                            BoxShadow(
+                              color: Colors.white.withOpacity(0.4),
+                              blurRadius: 60,
+                              spreadRadius: 20,
+                            ),
+                            BoxShadow(
+                              color: const Color(0xFF1565C0).withOpacity(0.3),
+                              blurRadius: 40,
+                              spreadRadius: 15,
+                            ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child: Image.asset(
+                            'assets/images/logoswipe.png',
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Icon(
+                                Icons.business,
+                                size: 120,
+                                color: Color(0xFF0D47A1),
+                              );
+                            },
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Preparando tu experiencia',
-                      style: TextStyle(
-                        color: const Color(0xFF1E3A8A).withOpacity(0.7),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.2,
+                      const SizedBox(height: 50),
+                      
+                      // Título con degradado
+                      ShaderMask(
+                        shaderCallback: (bounds) => LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.white,
+                            Colors.white.withOpacity(0.85),
+                            Colors.cyan.shade100,
+                          ],
+                        ).createShader(bounds),
+                        child: const Text(
+                          'JobSwipe',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 60,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: -2,
+                            shadows: [
+                              Shadow(
+                                color: Color(0xFF1565C0),
+                                offset: Offset(0, 4),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 20),
+                      
+                      // Subtítulo con degradado
+                      ShaderMask(
+                        shaderCallback: (bounds) => LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [
+                            Colors.white.withOpacity(0.9),
+                            Colors.white.withOpacity(0.7),
+                            Colors.cyan.shade200.withOpacity(0.8),
+                          ],
+                        ).createShader(bounds),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 35),
+                          child: Text(
+                            'Tu futuro laboral comienza aquí',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                              letterSpacing: 0.6,
+                              height: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 80),
+                      
+                      // Barra de progreso animada
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 50),
+                        child: Container(
+                          height: 8,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.white.withOpacity(0.15),
+                                Colors.cyan.withOpacity(0.15),
+                              ],
+                            ),
+                          ),
+                          child: Stack(
+                            children: [
+                              Container(
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10),
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.white.withOpacity(0.95),
+                                      Colors.cyan.shade100.withOpacity(0.95),
+                                    ],
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.cyan.withOpacity(0.4),
+                                      blurRadius: 8,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                                width: 70,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      
+                      // Texto de carga
+                      Text(
+                        'Iniciando...',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withOpacity(0.8),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

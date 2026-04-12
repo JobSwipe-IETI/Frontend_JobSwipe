@@ -63,6 +63,7 @@ class _AuthGateState extends State<AuthGate> {
 
   bool _isLoading = false;
   bool _isAuthenticated = false;
+  String? _jwt;
   String? _errorMessage;
 
   @override
@@ -79,6 +80,7 @@ class _AuthGateState extends State<AuthGate> {
 
     setState(() {
       _isAuthenticated = token != null && token.isNotEmpty;
+      _jwt = token;
     });
   }
 
@@ -110,6 +112,7 @@ class _AuthGateState extends State<AuthGate> {
       setState(() {
         _isLoading = false;
         _isAuthenticated = true;
+        _jwt = jwt;
       });
     } catch (error) {
       if (!mounted) {
@@ -133,6 +136,7 @@ class _AuthGateState extends State<AuthGate> {
 
     setState(() {
       _isAuthenticated = false;
+      _jwt = null;
       _errorMessage = null;
     });
   }
@@ -140,7 +144,7 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     if (_isAuthenticated) {
-      return HomeScreen(onLogout: _logout);
+      return HomeScreen(onLogout: _logout, jwt: _jwt ?? '');
     }
 
     return LoginScreen(

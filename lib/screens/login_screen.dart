@@ -5,7 +5,7 @@ import '../config/theme.dart';
 import 'terms_screen.dart';
 import 'privacy_screen.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({
     super.key,
     required this.isLoading,
@@ -18,111 +18,258 @@ class LoginScreen extends StatelessWidget {
   final VoidCallback onGoogleLogin;
 
   @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupAnimations();
+  }
+
+  void _setupAnimations() {
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1800),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.7, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+
+    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
+        .animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+    
     return Scaffold(
-      body: Stack(
-        children: [
-          // Gradient Header Background
-          Container(
-            height: MediaQuery.of(context).size.height * 0.30,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  JobSwipeTheme.primaryIndigo.withOpacity(0.7),
-                  JobSwipeTheme.primaryBlue.withOpacity(0.7),
-                ],
-              ),
-            ),
+      body: Container(
+        width: screenWidth,
+        height: screenHeight,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              const Color(0xFF0A1E5E),
+              const Color(0xFF0D47A1),
+              const Color(0xFF1565C0),
+              const Color(0xFF1976D2),
+              const Color(0xFF2196F3),
+              const Color(0xFF42A5F5),
+            ],
+            stops: const [0.0, 0.15, 0.35, 0.55, 0.75, 1.0],
           ),
-          // White rounded content
-          SafeArea(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.08),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(32),
-                        boxShadow: [
-                          BoxShadow(
-                            color: JobSwipeTheme.primaryIndigo.withOpacity(0.15),
-                            blurRadius: 30,
-                            spreadRadius: 5,
-                            offset: const Offset(0, 10),
-                          ),
+        ),
+        child: Stack(
+          children: [
+            // Animated background circles
+            Positioned(
+              top: -100,
+              right: -100,
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: ScaleTransition(
+                  scale: _scaleAnimation,
+                  child: Container(
+                    width: 400,
+                    height: 400,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          Colors.white.withOpacity(0.1),
+                          Colors.white.withOpacity(0.01),
                         ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(40),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildLogoSection(),
-                            const SizedBox(height: 32),
-                            _buildTitleSection(),
-                            const SizedBox(height: 16),
-                            _buildDescriptionSection(),
-                            const SizedBox(height: 40),
-                            _buildGoogleLoginButton(context),
-                            if (errorMessage != null) ...[
-                              const SizedBox(height: 20),
-                              _buildErrorMessage(),
-                            ],
-                            const SizedBox(height: 32),
-                            _buildTermsAndPrivacy(context),
-                          ],
-                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 32),
-                ],
+                ),
               ),
             ),
-          ),
-        ],
+            Positioned(
+              bottom: -150,
+              left: -150,
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: ScaleTransition(
+                  scale: _scaleAnimation,
+                  child: Container(
+                    width: 500,
+                    height: 500,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          Colors.cyan.withOpacity(0.08),
+                          Colors.cyan.withOpacity(0.01),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            
+            // Main content
+            SafeArea(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    children: [
+                      SizedBox(height: screenHeight * 0.05),
+                      
+                      FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: SlideTransition(
+                          position: _slideAnimation,
+                          child: ScaleTransition(
+                            scale: _scaleAnimation,
+                            child: Container(
+                              constraints: const BoxConstraints(maxWidth: 550),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(50),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.25),
+                                    blurRadius: 60,
+                                    spreadRadius: 15,
+                                    offset: const Offset(0, 25),
+                                  ),
+                                  BoxShadow(
+                                    color: const Color(0xFF42A5F5).withOpacity(0.2),
+                                    blurRadius: 40,
+                                    spreadRadius: 10,
+                                  ),
+                                ],
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(48),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    _buildLogoSection(),
+                                    const SizedBox(height: 40),
+                                    _buildTitleSection(),
+                                    const SizedBox(height: 18),
+                                    _buildDescriptionSection(),
+                                    const SizedBox(height: 50),
+                                    _buildGoogleLoginButton(context),
+                                    if (widget.errorMessage != null) ...[
+                                      const SizedBox(height: 28),
+                                      _buildErrorMessage(),
+                                    ],
+                                    const SizedBox(height: 40),
+                                    _buildTermsAndPrivacy(context),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: screenHeight * 0.08),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildLogoSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: JobSwipeTheme.primaryGradient,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: JobSwipeTheme.primaryIndigo.withOpacity(0.2),
-            blurRadius: 15,
-            spreadRadius: 3,
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Solo la sombra difuminada sin círculo sólido
+        Container(
+          width: 280,
+          height: 280,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF5E35B1).withOpacity(0.4),
+                blurRadius: 100,
+                spreadRadius: 40,
+              ),
+              BoxShadow(
+                color: const Color(0xFF3F51B5).withOpacity(0.25),
+                blurRadius: 60,
+                spreadRadius: 20,
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Image.asset(
-        'assets/images/logoswipe.png',
-        height: 140,
-        width: 140,
-        fit: BoxFit.contain,
-      ),
+        ),
+        // Logo en el centro
+        Image.asset(
+          'assets/images/logoswipe.png',
+          height: 220,
+          width: 220,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => const Icon(
+            Icons.business,
+            size: 140,
+            color: Colors.white,
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildTitleSection() {
     return Column(
-      children: <Widget>[
-        Text(
-          'JobSwipe AI',
-          style: TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.w900,
-            color: JobSwipeTheme.primaryIndigo,
-            letterSpacing: -0.5,
+      children: [
+        ShaderMask(
+          shaderCallback: (bounds) => LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              JobSwipeTheme.primaryIndigo,
+              JobSwipeTheme.primaryBlue,
+            ],
+          ).createShader(bounds),
+          child: const Text(
+            'JobSwipe AI',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 48,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+              letterSpacing: -1.5,
+            ),
           ),
         ),
       ],
@@ -131,16 +278,16 @@ class LoginScreen extends StatelessWidget {
 
   Widget _buildDescriptionSection() {
     return Column(
-      children: <Widget>[
+      children: [
         Text(
           'Tu trabajo ideal te está esperando',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.grey.shade700,
-            fontSize: 15,
+            fontSize: 18,
             fontWeight: FontWeight.w600,
-            height: 1.4,
-            letterSpacing: 0.2,
+            height: 1.6,
+            letterSpacing: 0.4,
           ),
         ),
       ],
@@ -148,46 +295,76 @@ class LoginScreen extends StatelessWidget {
   }
 
   Widget _buildGoogleLoginButton(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: isLoading ? null : onGoogleLogin,
-        icon: isLoading
-            ? SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    Colors.white,
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            JobSwipeTheme.primaryIndigo,
+            JobSwipeTheme.primaryBlue,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: JobSwipeTheme.primaryIndigo.withOpacity(0.5),
+            blurRadius: 25,
+            spreadRadius: 8,
+            offset: const Offset(0, 12),
+          ),
+          BoxShadow(
+            color: JobSwipeTheme.primaryBlue.withOpacity(0.2),
+            blurRadius: 15,
+            spreadRadius: 3,
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.isLoading ? null : widget.onGoogleLogin,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.isLoading)
+                  SizedBox(
+                    width: 26,
+                    height: 26,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Colors.white,
+                      ),
+                    ),
+                  )
+                else
+                  Image.asset(
+                    'assets/images/google_icon.png',
+                    height: 26,
+                    width: 26,
+                    errorBuilder: (context, error, stackTrace) => const Icon(
+                      Icons.login_rounded,
+                      color: Colors.white,
+                      size: 26,
+                    ),
+                  ),
+                const SizedBox(width: 14),
+                Text(
+                  widget.isLoading ? 'Iniciando sesión...' : 'Continuar con Google',
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.6,
+                    color: Colors.white,
                   ),
                 ),
-              )
-            : Image.asset(
-                'assets/images/google_icon.png',
-                height: 24,
-                width: 24,
-                errorBuilder: (context, error, stackTrace) => const Icon(
-                  Icons.login_rounded,
-                  color: Colors.white,
-                ),
-              ),
-        label: Text(
-          isLoading ? 'Iniciando sesión...' : 'Continuar con Google',
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.3,
-            color: Colors.white,
-          ),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: JobSwipeTheme.primaryIndigo,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          minimumSize: const Size.fromHeight(64),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+              ],
+            ),
           ),
         ),
       ),
@@ -196,28 +373,29 @@ class LoginScreen extends StatelessWidget {
 
   Widget _buildErrorMessage() {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: JobSwipeTheme.errorRed.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
+        color: JobSwipeTheme.errorRed.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: JobSwipeTheme.errorRed.withOpacity(0.2),
+          color: JobSwipeTheme.errorRed.withOpacity(0.3),
+          width: 2,
         ),
       ),
       child: Row(
-        spacing: 10,
-        children: <Widget>[
+        spacing: 12,
+        children: [
           Icon(
             Icons.error_rounded,
             color: JobSwipeTheme.errorRed,
-            size: 18,
+            size: 22,
           ),
           Expanded(
             child: Text(
-              errorMessage!,
+              widget.errorMessage!,
               style: TextStyle(
                 color: JobSwipeTheme.errorRed,
-                fontSize: 12,
+                fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -229,23 +407,24 @@ class LoginScreen extends StatelessWidget {
 
   Widget _buildTermsAndPrivacy(BuildContext context) {
     return Column(
-      spacing: 12,
-      children: <Widget>[
+      spacing: 14,
+      children: [
         RichText(
           textAlign: TextAlign.center,
           text: TextSpan(
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 12,
               height: 1.6,
               color: Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
             ),
-            children: <TextSpan>[
+            children: [
               const TextSpan(text: 'Al continuar, aceptas nuestros '),
               TextSpan(
                 text: 'Términos',
                 style: TextStyle(
                   color: JobSwipeTheme.primaryIndigo,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                   decoration: TextDecoration.underline,
                 ),
                 recognizer: TapGestureRecognizer()
@@ -256,7 +435,7 @@ class LoginScreen extends StatelessWidget {
                 text: 'Privacidad',
                 style: TextStyle(
                   color: JobSwipeTheme.primaryIndigo,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                   decoration: TextDecoration.underline,
                 ),
                 recognizer: TapGestureRecognizer()

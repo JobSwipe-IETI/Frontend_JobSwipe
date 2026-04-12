@@ -82,6 +82,38 @@ class AuthService {
     }
   }
 
+  /// Decodifica el JWT y extrae el rol del usuario
+  /// Retorna "CANDIDATE" o "COMPANY"
+  static String? extractRoleFromJwt(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) {
+        debugPrint('JWT inválido: debe tener 3 partes');
+        return null;
+      }
+
+      // Decodificar payload (segundo elemento)
+      String payload = parts[1];
+      
+      // Agregar padding si es necesario
+      final int padLength = 4 - (payload.length % 4);
+      if (padLength != 4) {
+        payload += '=' * padLength;
+      }
+
+      final decodedBytes = base64Url.decode(payload);
+      final decodedString = utf8.decode(decodedBytes);
+      final json = jsonDecode(decodedString) as Map<String, dynamic>;
+      
+      final role = json['role'] as String?;
+      debugPrint('📋 JWT Role: $role');
+      return role;
+    } catch (e) {
+      debugPrint('❌ Error decodificando JWT: $e');
+      return null;
+    }
+  }
+
   Future<void> signOutGoogle() => _googleSignIn.signOut();
 }
 
