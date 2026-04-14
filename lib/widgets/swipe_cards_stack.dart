@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../models/vacancy_model.dart';
 import '../controllers/swipe_controller.dart';
 import 'swipe_card.dart';
-import 'match_dialog.dart';
 
 /// Callback cuando una tarjeta fue descartada
 typedef OnCardSwiped = void Function(VacancyModel vacancy, SwipeResult result);
@@ -138,40 +137,6 @@ class _SwipeCardsStackState extends State<SwipeCardsStack>
         _exitAnimationController.reset();
         _isAnimating = false;
 
-        // Muestra match dialog si es un like
-        if (result == SwipeResult.like) {
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (mounted) {
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder: (BuildContext context) {
-                  return MatchDialog(
-                    vacancy: currentVacancy,
-                    onGoToChat: () {
-                      // TODO: Navegar a pantalla de chat
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('💬 Abriendo chat...'),
-                          duration: Duration(milliseconds: 800),
-                        ),
-                      );
-                    },
-                    onContinueExploring: () {
-                      // Ya está continuando el flujo normal
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('📂 Continuando con las siguientes tarjetas...'),
-                          duration: Duration(milliseconds: 800),
-                        ),
-                      );
-                    },
-                  );
-                },
-              );
-            }
-          });
-        }
       }
     });
   }

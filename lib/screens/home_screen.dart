@@ -53,10 +53,28 @@ class _HomeScreenState extends State<HomeScreen>
   List<VacancyModel> _companyVacancies = const [];
   List<CompanyVacancyPipelineItem> _companyVacancyPipeline = const [];
   List<CompanyLikeActivity> _companyLikeActivity = const [];
+  List<UserMatchItem> _matches = const [];
+  List<CandidateApplicationItem> _candidateApplications = const [];
+  final Set<String> _knownMatchKeys = <String>{};
+  bool _isLoadingMatches = false;
+  bool _isLoadingApplications = false;
+  Future<void>? _matchesLoadInFlight;
+  Future<void>? _applicationsLoadInFlight;
+  String? _matchesError;
+  String? _applicationsError;
+  int _matchesBadgeCount = 0;
+  int _connectionsSectionIndex = 0;
+  bool _isShowingRejectionDialog = false;
+  OverlayEntry? _topNoticeEntry;
+  Timer? _topNoticeTimer;
   final Map<int, List<VacancyApplicant>> _applicantsCache =
       <int, List<VacancyApplicant>>{};
   final Map<int, Future<List<VacancyApplicant>>> _applicantsInFlight =
       <int, Future<List<VacancyApplicant>>>{};
+    final Map<int, VacancyFormData> _vacancyFormCache =
+      <int, VacancyFormData>{};
+    final Map<int, Future<VacancyFormData>> _vacancyFormInFlight =
+      <int, Future<VacancyFormData>>{};
   int _exploreLoadingStep = 0;
   int _exploreProgressPercent = 0;
   String? _exploreBackendMessage;
@@ -130,6 +148,10 @@ class _HomeScreenState extends State<HomeScreen>
     }
     if (_isCompanyAccount) {
       _loadCompanyDashboard();
+    }
+    _loadMatches(initialLoad: true);
+    if (_isCandidateAccount) {
+      _loadCandidateApplications(initialLoad: true);
     }
   }
 
@@ -368,6 +390,8 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void dispose() {
     _exploreLoadingTicker?.cancel();
+    _topNoticeTimer?.cancel();
+    _topNoticeEntry?.remove();
     _pageController.dispose();
     _animationController.dispose();
     super.dispose();
@@ -471,6 +495,11 @@ class _HomeScreenState extends State<HomeScreen>
                   vacancyId: vacancy.id,
                   decision: decision,
                 )
+                .then((_) {
+                  if (_isCandidateAccount) {
+                    unawaited(_loadCandidateApplications());
+                  }
+                })
                 .catchError((_) {
                   // Keep UX smooth if swipe persistence fails transiently.
                 }),
@@ -522,26 +551,38 @@ class _HomeScreenState extends State<HomeScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const SizedBox(
-                width: 40,
-                height: 40,
-                child: CircularProgressIndicator(strokeWidth: 3),
+              const Icon(
+                Icons.workspaces_rounded,
+                size: 42,
+                color: Color(0xFF0EA5E9),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: 240,
+                child: LinearProgressIndicator(
+                  minHeight: 8,
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
               const SizedBox(height: 14),
               const Text(
-                'Cargando actividad de vacantes...',
+                'Cargando actividad de vacantes... 📊',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 15,
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF334155),
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
+              const SizedBox(height: 8),
+              const Text(
                 'Estamos reuniendo tus vacantes, postulados y likes.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF64748B),
+                  height: 1.3,
+                ),
               ),
             ],
           ),
@@ -637,8 +678,7 @@ class _HomeScreenState extends State<HomeScreen>
             )
           else
             ..._companyVacancyPipeline
-                .map(_buildCompanyVacancyPipelineCard)
-                .toList(growable: false),
+                .map(_buildCompanyVacancyPipelineCard),
           const SizedBox(height: 20),
           _buildSectionTitle('Notificaciones de interés'),
           const SizedBox(height: 10),
@@ -661,8 +701,7 @@ class _HomeScreenState extends State<HomeScreen>
             )
           else
             ..._companyLikeActivity
-                .map(_buildCompanyActivityItem)
-                .toList(growable: false),
+                .map(_buildCompanyActivityItem),
         ],
       ),
     );
@@ -1031,12 +1070,60 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildApplicantsLoadingState(String vacancyTitle) {
-    return _buildApplicantsStatusCard(
-      icon: Icons.groups_rounded,
-      iconColor: JobSwipeTheme.primaryIndigo,
-      title: 'Cargando postulados',
-      description:
-          'Estamos trayendo compatibilidad, score IA y fecha de postulación para "$vacancyTitle".',
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.groups_rounded,
+              size: 42,
+              color: Color(0xFF6366F1),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: 240,
+              child: LinearProgressIndicator(
+                minHeight: 8,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Cargando postulados... 👥',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF334155),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Estamos trayendo compatibilidad, score IA y fecha de postulación para "$vacancyTitle".',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF64748B),
+                height: 1.3,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1060,7 +1147,12 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildApplicantsContent({
     required CompanyVacancyPipelineItem item,
     required List<VacancyApplicant> applicants,
+    required Set<int> decisionInProgressCandidateIds,
     required VoidCallback onRefresh,
+    required Future<void> Function(
+      VacancyApplicant applicant,
+      SwipeDecision decision,
+    ) onDecision,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1117,6 +1209,10 @@ class _HomeScreenState extends State<HomeScreen>
                   itemCount: applicants.length,
                   itemBuilder: (context, index) {
                     final applicant = applicants[index];
+                    final bool isProcessing =
+                        decisionInProgressCandidateIds.contains(
+                          applicant.candidateId,
+                        );
                     final String compatibilityText =
                         applicant.compatibilityPercentage == null
                         ? 'Sin score'
@@ -1194,16 +1290,22 @@ class _HomeScreenState extends State<HomeScreen>
                           const SizedBox(height: 10),
                           Row(
                             children: [
+                              if (isProcessing)
+                                const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              if (isProcessing) const SizedBox(width: 8),
                               OutlinedButton.icon(
-                                onPressed: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Falta habilitar endpoint de decisión de empresa para guardar este like.',
+                                onPressed: isProcessing
+                                    ? null
+                                    : () => onDecision(
+                                        applicant,
+                                        SwipeDecision.like,
                                       ),
-                                    ),
-                                  );
-                                },
                                 icon: const Icon(
                                   Icons.thumb_up_alt_outlined,
                                   size: 16,
@@ -1212,15 +1314,12 @@ class _HomeScreenState extends State<HomeScreen>
                               ),
                               const SizedBox(width: 8),
                               OutlinedButton.icon(
-                                onPressed: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Falta habilitar endpoint de decisión de empresa para guardar este dislike.',
+                                onPressed: isProcessing
+                                    ? null
+                                    : () => onDecision(
+                                        applicant,
+                                        SwipeDecision.dislike,
                                       ),
-                                    ),
-                                  );
-                                },
                                 icon: const Icon(
                                   Icons.thumb_down_alt_outlined,
                                   size: 16,
@@ -1243,6 +1342,7 @@ class _HomeScreenState extends State<HomeScreen>
     CompanyVacancyPipelineItem item,
   ) async {
     List<VacancyApplicant>? cachedApplicants = _applicantsCache[item.vacancyId];
+    final Set<int> decisionInProgressCandidateIds = <int>{};
     Future<List<VacancyApplicant>>? applicantsFuture;
     if (cachedApplicants == null) {
       applicantsFuture = _loadApplicantsForVacancy(item.vacancyId);
@@ -1265,6 +1365,8 @@ class _HomeScreenState extends State<HomeScreen>
                   ? _buildApplicantsContent(
                       item: item,
                       applicants: cachedApplicants!,
+                      decisionInProgressCandidateIds:
+                          decisionInProgressCandidateIds,
                       onRefresh: () {
                         setModalState(() {
                           cachedApplicants = null;
@@ -1273,6 +1375,78 @@ class _HomeScreenState extends State<HomeScreen>
                             forceRefresh: true,
                           );
                         });
+                      },
+                      onDecision: (applicant, decision) async {
+                        setModalState(() {
+                          decisionInProgressCandidateIds.add(
+                            applicant.candidateId,
+                          );
+                        });
+
+                        final CompanyCandidateDecisionResult? decisionResult = await _handleCompanyCandidateDecision(
+                          vacancyId: item.vacancyId,
+                          applicant: applicant,
+                          decision: decision,
+                        );
+
+                        if (decisionResult == null) {
+                          setModalState(() {
+                            decisionInProgressCandidateIds.remove(
+                              applicant.candidateId,
+                            );
+                          });
+                          return;
+                        }
+
+                        final bool matched = decisionResult.matched;
+
+                        if (!mounted) {
+                          return;
+                        }
+
+                        if (decision == SwipeDecision.like) {
+                          setModalState(() {
+                            cachedApplicants = cachedApplicants!
+                                .where((entry) => entry.candidateId != applicant.candidateId)
+                                .toList(growable: false);
+                            decisionInProgressCandidateIds.remove(
+                              applicant.candidateId,
+                            );
+                          });
+                          _applicantsCache[item.vacancyId] = cachedApplicants!;
+                        } else {
+                          setModalState(() {
+                            decisionInProgressCandidateIds.remove(
+                              applicant.candidateId,
+                            );
+                          });
+                        }
+
+                        if (matched) {
+                          _pushImmediateMatchSignal(
+                            vacancyId: item.vacancyId,
+                            vacancyTitle: item.vacancyTitle,
+                            applicant: applicant,
+                          );
+                        }
+
+                        _showFloatingNotification(
+                          matched
+                            ? 'Candidato aprobado. Nueva conexion lista en Conexiones. 💜'
+                            : decision == SwipeDecision.like
+                              ? 'Candidato aprobado correctamente. ✅'
+                              : 'Dislike guardado para ${applicant.candidateName}.',
+                          icon: matched
+                            ? Icons.favorite_rounded
+                            : decision == SwipeDecision.like
+                              ? Icons.check_circle_rounded
+                              : Icons.thumb_down_alt_rounded,
+                          accentColor: matched
+                            ? const Color(0xFF7C3AED)
+                            : decision == SwipeDecision.like
+                              ? JobSwipeTheme.successGreen
+                              : const Color(0xFF64748B),
+                        );
                       },
                     )
                   : FutureBuilder<List<VacancyApplicant>>(
@@ -1307,6 +1481,8 @@ class _HomeScreenState extends State<HomeScreen>
                         return _buildApplicantsContent(
                           item: item,
                           applicants: applicants,
+                          decisionInProgressCandidateIds:
+                              decisionInProgressCandidateIds,
                           onRefresh: () {
                             setModalState(() {
                               cachedApplicants = null;
@@ -1315,6 +1491,79 @@ class _HomeScreenState extends State<HomeScreen>
                                 forceRefresh: true,
                               );
                             });
+                          },
+                          onDecision: (applicant, decision) async {
+                            setModalState(() {
+                              decisionInProgressCandidateIds.add(
+                                applicant.candidateId,
+                              );
+                            });
+
+                            final CompanyCandidateDecisionResult? decisionResult = await _handleCompanyCandidateDecision(
+                              vacancyId: item.vacancyId,
+                              applicant: applicant,
+                              decision: decision,
+                            );
+
+                            if (decisionResult == null) {
+                              setModalState(() {
+                                decisionInProgressCandidateIds.remove(
+                                  applicant.candidateId,
+                                );
+                              });
+                              return;
+                            }
+
+                            final bool matched = decisionResult.matched;
+
+                            if (!mounted) {
+                              return;
+                            }
+
+                            if (decision == SwipeDecision.like) {
+                              setModalState(() {
+                                cachedApplicants = applicants
+                                    .where((entry) => entry.candidateId != applicant.candidateId)
+                                    .toList(growable: false);
+                                applicantsFuture = Future.value(cachedApplicants);
+                                decisionInProgressCandidateIds.remove(
+                                  applicant.candidateId,
+                                );
+                              });
+                              _applicantsCache[item.vacancyId] = cachedApplicants!;
+                            } else {
+                              setModalState(() {
+                                decisionInProgressCandidateIds.remove(
+                                  applicant.candidateId,
+                                );
+                              });
+                            }
+
+                            if (matched) {
+                              _pushImmediateMatchSignal(
+                                vacancyId: item.vacancyId,
+                                vacancyTitle: item.vacancyTitle,
+                                applicant: applicant,
+                              );
+                            }
+
+                            _showFloatingNotification(
+                              matched
+                                  ? 'Candidato aprobado. Nueva conexion lista en Conexiones. 💜'
+                                  : decision == SwipeDecision.like
+                                      ? 'Candidato aprobado correctamente. ✅'
+                                      : 'Dislike guardado para ${applicant.candidateName}.',
+                              icon: matched
+                                  ? Icons.favorite_rounded
+                                  : decision == SwipeDecision.like
+                                      ? Icons.check_circle_rounded
+                                      : Icons.thumb_down_alt_rounded,
+                              accentColor: matched
+                                  ? const Color(0xFF7C3AED)
+                                  : decision == SwipeDecision.like
+                                      ? JobSwipeTheme.successGreen
+                                      : const Color(0xFF64748B),
+                            );
                           },
                         );
                       },
@@ -1563,7 +1812,7 @@ class _HomeScreenState extends State<HomeScreen>
           );
         }
 
-        await Future.delayed(const Duration(milliseconds: 1200));
+        await Future.delayed(const Duration(milliseconds: 500));
       }
 
       for (int i = 0; i < 6; i++) {
@@ -1609,14 +1858,32 @@ class _HomeScreenState extends State<HomeScreen>
       });
       _stopExploreLoadingMessages();
     } catch (error) {
-      if (!mounted) {
-        return;
+      try {
+        final List<VacancyModel> fallback = await _vacancyService
+            .getExploreVacancies(jwt: widget.jwt, limit: 20);
+
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _exploreVacancies = fallback;
+          _showingFallbackVacancies = true;
+          _isLoadingExplore = false;
+          _exploreError = null;
+        });
+        _stopExploreLoadingMessages();
+      } catch (_) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _isLoadingExplore = false;
+          _exploreError =
+              'No se pudieron cargar vacantes por ahora. Intenta de nuevo en un momento.';
+        });
+        _stopExploreLoadingMessages();
       }
-      setState(() {
-        _isLoadingExplore = false;
-        _exploreError = error.toString();
-      });
-      _stopExploreLoadingMessages();
     }
   }
 
@@ -1700,20 +1967,1107 @@ class _HomeScreenState extends State<HomeScreen>
     await _loadFallbackVacancies(showTransitionMessage: true);
   }
 
+  Future<void> _loadMatches({bool initialLoad = false}) async {
+    if (_matchesLoadInFlight != null) {
+      return _matchesLoadInFlight!;
+    }
+
+    final Future<void> inFlight = _loadMatchesInternal(initialLoad: initialLoad);
+    _matchesLoadInFlight = inFlight;
+
+    try {
+      await inFlight;
+    } finally {
+      if (_matchesLoadInFlight == inFlight) {
+        _matchesLoadInFlight = null;
+      }
+    }
+  }
+
+  Future<void> _loadMatchesInternal({bool initialLoad = false}) async {
+    if (_isLoadingMatches) {
+      return;
+    }
+
+    bool shouldRetry = false;
+
+    setState(() {
+      _isLoadingMatches = true;
+      _matchesError = null;
+    });
+
+    try {
+      final List<UserMatchItem> matches = await _vacancyService.getMatches(
+        jwt: widget.jwt,
+        limit: 30,
+      );
+
+      final Set<String> incomingKeys = matches
+          .map((item) => item.stableKey)
+          .toSet();
+      int newCount = 0;
+      if (!initialLoad) {
+        for (final String key in incomingKeys) {
+          if (!_knownMatchKeys.contains(key)) {
+            newCount++;
+          }
+        }
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _matches = matches;
+        _knownMatchKeys
+          ..clear()
+          ..addAll(incomingKeys);
+        if (initialLoad || _selectedIndex == 1) {
+          _matchesBadgeCount = 0;
+        } else if (newCount > 0) {
+          _matchesBadgeCount += newCount;
+        }
+      });
+    } on VacancyException catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        if (_matches.isEmpty) {
+          _matchesError = e.message;
+        }
+      });
+
+      if (_matches.isNotEmpty) {
+        _showFloatingNotification(
+          e.message,
+          icon: Icons.wifi_off_rounded,
+          accentColor: JobSwipeTheme.errorRed,
+        );
+      }
+
+      if (!initialLoad) {
+        shouldRetry = true;
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        if (_matches.isEmpty) {
+          _matchesError = 'No se pudieron cargar tus matches por ahora.';
+        }
+      });
+
+      if (_matches.isNotEmpty) {
+        _showFloatingNotification(
+          'No se pudieron actualizar tus matches ahora.',
+          icon: Icons.error_outline_rounded,
+          accentColor: JobSwipeTheme.errorRed,
+        );
+      }
+
+      if (!initialLoad) {
+        shouldRetry = true;
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingMatches = false;
+        });
+      }
+    }
+
+    if (shouldRetry && mounted) {
+      Future<void>.delayed(const Duration(milliseconds: 800), () {
+        if (!mounted || _isLoadingMatches) {
+          return;
+        }
+        unawaited(_loadMatches(initialLoad: true));
+      });
+    }
+  }
+
+  Future<void> _loadCandidateApplications({bool initialLoad = false}) async {
+    if (_applicationsLoadInFlight != null) {
+      return _applicationsLoadInFlight!;
+    }
+
+    final Future<void> inFlight = _loadCandidateApplicationsInternal(
+      initialLoad: initialLoad,
+    );
+    _applicationsLoadInFlight = inFlight;
+
+    try {
+      await inFlight;
+    } finally {
+      if (_applicationsLoadInFlight == inFlight) {
+        _applicationsLoadInFlight = null;
+      }
+    }
+  }
+
+  Future<void> _loadCandidateApplicationsInternal({
+    bool initialLoad = false,
+  }) async {
+    if (_isLoadingApplications || !_isCandidateAccount) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingApplications = true;
+      _applicationsError = null;
+    });
+
+    try {
+      final List<CandidateApplicationItem> applications =
+          await _vacancyService.getCandidateApplications(
+            jwt: widget.jwt,
+            limit: 50,
+          );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _candidateApplications = applications;
+      });
+    } on VacancyException catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        if (_candidateApplications.isEmpty || initialLoad) {
+          _applicationsError = e.message;
+        }
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        if (_candidateApplications.isEmpty || initialLoad) {
+          _applicationsError =
+              'No se pudieron cargar tus postulaciones por ahora.';
+        }
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingApplications = false;
+        });
+      }
+    }
+  }
+
+  Future<CompanyCandidateDecisionResult?> _handleCompanyCandidateDecision({
+    required int vacancyId,
+    required VacancyApplicant applicant,
+    required SwipeDecision decision,
+  }) async {
+    try {
+      CompanyDecisionPayload? payload;
+      if (decision == SwipeDecision.dislike) {
+        final VacancyFormData vacancyForm = await _getVacancyFormForDecision(
+          vacancyId,
+        );
+        payload = await _promptCompanyRejectionFeedback(
+          candidateName: applicant.candidateName,
+          vacancyForm: vacancyForm,
+          aiSummary: applicant.feedback,
+        );
+        if (payload == null) {
+          return null;
+        }
+      }
+
+      final CompanyCandidateDecisionResult result =
+          await _vacancyService.registerCompanyCandidateDecision(
+            jwt: widget.jwt,
+            vacancyId: vacancyId,
+            candidateId: applicant.candidateId,
+            decision: decision,
+            payload: payload,
+          );
+
+      if (!mounted) {
+        return null;
+      }
+
+      await _loadMatches();
+      if (_isCompanyAccount) {
+        await _loadCompanyDashboard();
+      }
+      return result;
+    } on VacancyException catch (e) {
+      if (!mounted) {
+        return null;
+      }
+      _showFloatingNotification(e.message);
+      return null;
+    } catch (_) {
+      if (!mounted) {
+        return null;
+      }
+      _showFloatingNotification(
+        'No se pudo guardar la decision de la empresa.',
+        icon: Icons.error_outline_rounded,
+        accentColor: JobSwipeTheme.errorRed,
+      );
+      return null;
+    }
+  }
+
+  Future<VacancyFormData> _getVacancyFormForDecision(int vacancyId) {
+    final VacancyFormData? cached = _vacancyFormCache[vacancyId];
+    if (cached != null) {
+      return Future.value(cached);
+    }
+
+    final Future<VacancyFormData>? pending = _vacancyFormInFlight[vacancyId];
+    if (pending != null) {
+      return pending;
+    }
+
+    final Future<VacancyFormData> load = _vacancyService
+        .getVacancyById(jwt: widget.jwt, vacancyId: vacancyId)
+        .then((value) {
+          _vacancyFormCache[vacancyId] = value;
+          return value;
+        });
+
+    _vacancyFormInFlight[vacancyId] = load;
+    load.whenComplete(() {
+      if (_vacancyFormInFlight[vacancyId] == load) {
+        _vacancyFormInFlight.remove(vacancyId);
+      }
+    });
+
+    return load;
+  }
+
+  Future<CompanyDecisionPayload?> _promptCompanyRejectionFeedback(
+    {
+    required String candidateName,
+    required VacancyFormData vacancyForm,
+    String? aiSummary,
+  }
+  ) async {
+    if (_isShowingRejectionDialog) {
+      return null;
+    }
+
+    _isShowingRejectionDialog = true;
+    try {
+      final CompanyDecisionPayload? payload = await Navigator.of(
+        context,
+        rootNavigator: true,
+      ).push<CompanyDecisionPayload>(
+        MaterialPageRoute<CompanyDecisionPayload>(
+          fullscreenDialog: true,
+          builder: (_) => CompanyRejectionScreen(
+            candidateName: candidateName,
+            vacancyForm: vacancyForm,
+            aiSummary: aiSummary,
+          ),
+        ),
+      );
+
+      return payload;
+    } finally {
+      _isShowingRejectionDialog = false;
+    }
+  }
+
+  Widget _buildChecklistSection({
+    required String title,
+    required List<String> options,
+    required Set<String> selectedValues,
+    required void Function(String value, bool enabled) onToggle,
+    required String emptyText,
+  }) {
+    final List<String> cleanedOptions = options
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF334155),
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (cleanedOptions.isEmpty)
+          Text(
+            emptyText,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: cleanedOptions.map((option) {
+              final bool selected = selectedValues.contains(option);
+              return FilterChip(
+                label: Text(option),
+                selected: selected,
+                onSelected: (enabled) => onToggle(option, enabled),
+              );
+            }).toList(growable: false),
+          ),
+      ],
+    );
+  }
+
+  void _showFloatingNotification(
+    String message, {
+    IconData icon = Icons.check_circle_rounded,
+    Color accentColor = const Color(0xFF6366F1),
+  }) {
+    if (!mounted) {
+      return;
+    }
+
+    _topNoticeTimer?.cancel();
+    _topNoticeEntry?.remove();
+
+    final OverlayState overlayState = Overlay.of(context);
+
+    _topNoticeEntry = OverlayEntry(
+      builder: (context) {
+        final double topInset = MediaQuery.of(context).viewPadding.top;
+        return Positioned(
+          top: topInset + 12,
+          left: 16,
+          right: 16,
+          child: Material(
+            color: Colors.transparent,
+            child: SafeArea(
+              bottom: false,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: accentColor.withValues(alpha: 0.25)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.10),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: accentColor.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(icon, size: 16, color: accentColor),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        message,
+                        style: const TextStyle(
+                          color: Color(0xFF0F172A),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    overlayState.insert(_topNoticeEntry!);
+    _topNoticeTimer = Timer(const Duration(seconds: 2), () {
+      _topNoticeEntry?.remove();
+      _topNoticeEntry = null;
+    });
+  }
+
+  void _pushImmediateMatchSignal({
+    required int vacancyId,
+    required String vacancyTitle,
+    required VacancyApplicant applicant,
+  }) {
+    final UserMatchItem optimistic = UserMatchItem(
+      vacancyId: vacancyId,
+      vacancyTitle: vacancyTitle,
+      counterpartId: applicant.candidateId,
+      counterpartName: applicant.candidateName,
+      matchedAt: DateTime.now(),
+      compatibilityPercentage: applicant.compatibilityPercentage,
+      compatibilityLevel: applicant.compatibilityLevel,
+    );
+
+    if (_knownMatchKeys.contains(optimistic.stableKey)) {
+      return;
+    }
+
+    setState(() {
+      _matches = <UserMatchItem>[optimistic, ..._matches];
+      _knownMatchKeys.add(optimistic.stableKey);
+      if (_selectedIndex != 1) {
+        _matchesBadgeCount += 1;
+      }
+    });
+  }
+
   Widget _buildMatches() {
+    if (_isCandidateAccount) {
+      return _buildCandidateConnectionsHub();
+    }
+
+    if (_isLoadingMatches && _matches.isEmpty) {
+      return _buildMatchesLoadingState();
+    }
+
+    if (_matchesError != null && _matches.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.warning_amber_rounded, size: 42),
+              const SizedBox(height: 10),
+              Text(
+                _matchesError!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: _loadMatches,
+                child: const Text('Reintentar'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader('Tus Matches'),
+          _buildHeader('Conexiones'),
           const SizedBox(height: 24),
-          _buildStatsCards(),
+          _buildStatsCards(matchesCount: _matches.length),
           const SizedBox(height: 28),
-          _buildSectionTitle('Últimos matches'),
+          _buildSectionTitle('Ultimas conexiones'),
           const SizedBox(height: 16),
-          ...[1, 2].map((i) => _buildMatchCard(i)),
+          if (_matches.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Text(
+                _isCompanyAccount
+                    ? 'Aun no tienes conexiones. Da like a candidatos para cerrar una conexion mutua.'
+                    : 'Aun no tienes conexiones. Cuando una empresa te de like, aparecera aqui.',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF475569),
+                  height: 1.35,
+                ),
+              ),
+            )
+          else
+            ..._matches.map(_buildMatchCard),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCandidateConnectionsHub() {
+    final List<CandidateApplicationItem> rejectedApplications =
+        _candidateApplications
+        .where((item) => item.isRejected)
+        .toList(growable: false);
+    final int rejectedCount = rejectedApplications.length;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHeader('Conexiones'),
+          const SizedBox(height: 24),
+          _buildStatsCards(
+            matchesCount: _matches.length,
+            applicationsCount: rejectedCount,
+            rejectedCount: rejectedCount,
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: _buildConnectionsTabButton(
+                  label: 'Conexiones',
+                  selected: _connectionsSectionIndex == 0,
+                  onTap: () {
+                    setState(() {
+                      _connectionsSectionIndex = 0;
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildConnectionsTabButton(
+                  label: 'Rechazos',
+                  selected: _connectionsSectionIndex == 1,
+                  onTap: () {
+                    setState(() {
+                      _connectionsSectionIndex = 1;
+                    });
+                    unawaited(_loadCandidateApplications());
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (_connectionsSectionIndex == 0)
+            _buildConnectionsSectionContent()
+          else
+            _buildApplicationsSectionContent(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConnectionsTabButton({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? JobSwipeTheme.primaryIndigo
+              : const Color(0xFFE2E8F0),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: selected ? Colors.white : const Color(0xFF334155),
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConnectionsSectionContent() {
+    if (_isLoadingMatches && _matches.isEmpty) {
+      return _buildMatchesLoadingState();
+    }
+
+    if (_matchesError != null && _matches.isEmpty) {
+      return _buildInlineRetryCard(
+        title: 'No se pudieron cargar tus conexiones',
+        message: _matchesError!,
+        onRetry: () => _loadMatches(),
+      );
+    }
+
+    if (_matches.isEmpty) {
+      return _buildInlineInfoCard(
+        title: 'Aun no tienes conexiones',
+        message:
+            'Cuando una empresa te de like a una vacante que ya te gusto, veras la conexion aqui.',
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: _matches.map(_buildMatchCard).toList(growable: false),
+    );
+  }
+
+  Widget _buildApplicationsSectionContent() {
+    final List<CandidateApplicationItem> rejectedApplications =
+        _candidateApplications
+            .where((item) => item.isRejected)
+            .toList(growable: false);
+
+    if (_isLoadingApplications && _candidateApplications.isEmpty) {
+      return _buildRejectionsLoadingState();
+    }
+
+    if (_applicationsError != null && _candidateApplications.isEmpty) {
+      return _buildInlineRetryCard(
+        title: 'No se pudieron cargar tus rechazos',
+        message: _applicationsError!,
+        onRetry: () => _loadCandidateApplications(),
+      );
+    }
+
+    if (rejectedApplications.isEmpty) {
+      return _buildInlineInfoCard(
+        title: 'Sin rechazos por ahora',
+        message:
+            'Aqui solo veras las vacantes rechazadas con el detalle de por que no avanzaste.',
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: rejectedApplications
+          .map(_buildCandidateApplicationCard)
+          .toList(growable: false),
+    );
+  }
+
+  Widget _buildInlineInfoCard({required String title, required String message}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF334155),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            message,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF475569),
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInlineRetryCard({
+    required String title,
+    required String message,
+    required Future<void> Function() onRetry,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF334155),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            message,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF475569)),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () => unawaited(onRetry()),
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Reintentar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCandidateApplicationCard(CandidateApplicationItem application) {
+    final bool pending = application.isPending;
+    final bool rejected = application.isRejected;
+    final Color statusColor = pending
+      ? const Color(0xFFF59E0B)
+      : rejected
+      ? const Color(0xFFDC2626)
+      : const Color(0xFF10B981);
+    final String statusLabel = pending
+      ? 'Pendiente'
+      : rejected
+      ? 'No avanzaste'
+      : 'Conectada';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  application.vacancyTitle,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF334155),
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${application.companyName} • ${_formatRelativeTime(application.appliedAt)}',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: () => _openRejectedApplicationDetails(application),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: const Color(0xFFC7D2FE)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.auto_awesome_rounded,
+                      size: 14,
+                      color: Color(0xFF4F46E5),
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      'Detalles',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF4338CA),
+                      ),
+                    ),
+                    SizedBox(width: 2),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 16,
+                      color: Color(0xFF4338CA),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openRejectedApplicationDetails(
+    CandidateApplicationItem application,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.78,
+          decoration: const BoxDecoration(
+            color: Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  application.vacancyTitle,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF334155),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${application.companyName} • ${_formatRelativeTime(application.appliedAt)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                if ((application.rejectionReason ?? '').isNotEmpty)
+                  _buildDetailBlock(
+                    title: 'Motivo',
+                    content: application.rejectionReason!,
+                  ),
+                if ((application.expectedExperienceLevel ?? '').isNotEmpty)
+                  _buildDetailBlock(
+                    title: 'Nivel de experiencia esperado',
+                    content: application.expectedExperienceLevel!,
+                  ),
+                if (application.missingTechnologies.isNotEmpty)
+                  _buildDetailBlock(
+                    title: 'Tecnologias faltantes',
+                    content: application.missingTechnologies.join(', '),
+                  ),
+                if (application.missingResponsibilities.isNotEmpty)
+                  _buildDetailBlock(
+                    title: 'Responsabilidades no cumplidas',
+                    content: application.missingResponsibilities.join(', '),
+                  ),
+                if (application.missingTechnicalRequirements.isNotEmpty)
+                  _buildDetailBlock(
+                    title: 'Requisitos tecnicos no cumplidos',
+                    content:
+                        application.missingTechnicalRequirements.join(', '),
+                  ),
+                if ((application.aiSummary ?? '').isNotEmpty)
+                  _buildDetailBlock(
+                    title: 'Resumen IA',
+                    content: application.aiSummary!,
+                  ),
+                if ((application.rejectionComment ?? '').isNotEmpty)
+                  _buildDetailBlock(
+                    title: 'Comentario adicional',
+                    content: application.rejectionComment!,
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailBlock({required String title, required String content}) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF475569),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            content,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF0F172A),
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMatchesLoadingState() {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.favorite_rounded,
+              size: 42,
+              color: Color(0xFF7C3AED),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: 240,
+              child: LinearProgressIndicator(
+                minHeight: 8,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Buscando tus conexiones... 💜',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF334155),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Estamos sincronizando empresas, vacantes y estado de conexion.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: Color(0xFF64748B),
+                height: 1.3,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRejectionsLoadingState() {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.rule_folder_rounded,
+              size: 42,
+              color: Color(0xFF0EA5E9),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: 240,
+              child: LinearProgressIndicator(
+                minHeight: 8,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Cargando tus rechazos... 📄',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF334155),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Estamos consultando feedback y motivos de cada vacante.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: Color(0xFF64748B),
+                height: 1.3,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1784,16 +3138,37 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildStatsCards() {
+  Widget _buildStatsCards({
+    required int matchesCount,
+    int? applicationsCount,
+    int? rejectedCount,
+  }) {
+    final int resolvedApplications = applicationsCount ?? _matchesBadgeCount;
+    final int resolvedRejected = rejectedCount ?? _matchesBadgeCount;
+
     return Row(
       spacing: 12,
       children: [
-        Expanded(child: _buildStatCard('Matches', '24', Colors.blue.shade100)),
         Expanded(
-          child: _buildStatCard('Aplicaciones', '8', Colors.green.shade100),
+          child: _buildStatCard(
+            'Conexiones',
+            '$matchesCount',
+            Colors.blue.shade100,
+          ),
         ),
         Expanded(
-          child: _buildStatCard('Visitantes', '42', Colors.purple.shade100),
+          child: _buildStatCard(
+            _isCompanyAccount ? 'Candidatos' : 'Rechazos',
+            '$resolvedApplications',
+            Colors.green.shade100,
+          ),
+        ),
+        Expanded(
+          child: _buildStatCard(
+            _isCompanyAccount ? 'Nuevos' : 'Rechazos',
+            '$resolvedRejected',
+            Colors.purple.shade100,
+          ),
         ),
       ],
     );
@@ -1833,7 +3208,14 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildMatchCard(int index) {
+  Widget _buildMatchCard(UserMatchItem match) {
+    final String subtitle = _isCompanyAccount
+        ? '${match.counterpartName} - ${_formatRelativeTime(match.matchedAt)}'
+        : '${match.counterpartName} - ${_formatRelativeTime(match.matchedAt)}';
+    final String statusLabel = match.compatibilityPercentage != null
+        ? '${match.compatibilityPercentage!.toStringAsFixed(0)}%'
+        : (match.compatibilityLevel ?? 'Match');
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -1848,14 +3230,19 @@ class _HomeScreenState extends State<HomeScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Product Manager',
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF6366F1),
+              Expanded(
+                child: Text(
+                  match.vacancyTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF6366F1),
+                  ),
                 ),
               ),
+              const SizedBox(width: 10),
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -1866,7 +3253,7 @@ class _HomeScreenState extends State<HomeScreen>
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Text(
-                  'Interesado',
+                  'Conexion',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -1878,46 +3265,27 @@ class _HomeScreenState extends State<HomeScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            'Startup Innovadora - hace 2 horas',
+            subtitle,
             style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 12),
           Row(
-            spacing: 8,
             children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {},
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFE2E8F0)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: Text(
-                    'Ver detalles',
-                    style: TextStyle(
-                      color: JobSwipeTheme.primaryIndigo,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
                 ),
-              ),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: JobSwipeTheme.primaryIndigo,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text(
-                    'Responder',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF6366F1),
                   ),
                 ),
               ),
@@ -1931,8 +3299,8 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildBottomNav() {
     // Construir tabs dinámicamente según el tipo de usuario
     final tabs = _isCompanyAccount
-        ? const ['Explora', 'Matches', 'Perfil', 'Vacantes']
-        : const ['Explora', 'Matches', 'Perfil'];
+      ? const ['Explora', 'Conexiones', 'Perfil', 'Vacantes']
+      : const ['Explora', 'Conexiones', 'Perfil'];
 
     final icons = _isCompanyAccount
         ? const [
@@ -1969,6 +3337,7 @@ class _HomeScreenState extends State<HomeScreen>
               (index) => _buildNavItem(
                 icon: icons[index],
                 label: tabs[index],
+                showBadge: index == 1,
                 isSelected: _selectedIndex == index,
                 onTap: () => _onNavTap(index),
               ),
@@ -1982,6 +3351,7 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildNavItem({
     required IconData icon,
     required String label,
+    required bool showBadge,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
@@ -1991,12 +3361,42 @@ class _HomeScreenState extends State<HomeScreen>
         mainAxisSize: MainAxisSize.min,
         spacing: 4,
         children: [
-          Icon(
-            icon,
-            color: isSelected
-                ? JobSwipeTheme.primaryIndigo
-                : Colors.grey.shade500,
-            size: 24,
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(
+                icon,
+                color: isSelected
+                    ? JobSwipeTheme.primaryIndigo
+                    : Colors.grey.shade500,
+                size: 24,
+              ),
+              if (showBadge && _matchesBadgeCount > 0 && !isSelected)
+                Positioned(
+                  right: -8,
+                  top: -6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: JobSwipeTheme.errorRed,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      _matchesBadgeCount > 9
+                          ? '9+'
+                          : '$_matchesBadgeCount',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
           Text(
             label,
@@ -2023,6 +3423,13 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _onNavTap(int index) {
+    if (index == 1) {
+      _loadMatches();
+      if (_isCandidateAccount) {
+        _loadCandidateApplications();
+      }
+    }
+
     _pageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 250),
@@ -2030,6 +3437,9 @@ class _HomeScreenState extends State<HomeScreen>
     );
     setState(() {
       _selectedIndex = index;
+      if (index == 1) {
+        _matchesBadgeCount = 0;
+      }
     });
   }
 
@@ -2037,4 +3447,317 @@ class _HomeScreenState extends State<HomeScreen>
     // Ya no se necesita cargar permisos especiales
     // El tipo de usuario se obtiene del UserProvider
   }
+}
+
+class CompanyRejectionScreen extends StatefulWidget {
+  const CompanyRejectionScreen({
+    super.key,
+    required this.candidateName,
+    required this.vacancyForm,
+    this.aiSummary,
+  });
+
+  final String candidateName;
+  final VacancyFormData vacancyForm;
+  final String? aiSummary;
+
+  @override
+  State<CompanyRejectionScreen> createState() => _CompanyRejectionScreenState();
+}
+
+class _CompanyRejectionScreenState extends State<CompanyRejectionScreen> {
+  static const List<String> _reasonOptions = <String>[
+    'Experiencia insuficiente',
+    'Perfil tecnico incompleto',
+    'No cumple habilidades blandas',
+    'Desalineacion cultural',
+    'Compensacion fuera de rango',
+    'Otro',
+  ];
+
+  late String _selectedReason;
+  late String _selectedExperienceLevel;
+  final Set<String> _missingTechnologies = <String>{};
+  final Set<String> _missingResponsibilities = <String>{};
+  final Set<String> _missingTechnicalRequirements = <String>{};
+  final TextEditingController _commentController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedReason = _reasonOptions.first;
+    _selectedExperienceLevel = widget.vacancyForm.experienceLevel;
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String aiSummaryValue = (widget.aiSummary ?? '').trim();
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        title: const Text('Registrar rechazo'),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.candidateName,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF334155),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Selecciona solo lo que realmente no cumplio.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedReason,
+                decoration: const InputDecoration(
+                  labelText: 'Motivo principal',
+                  border: OutlineInputBorder(),
+                ),
+                items: _reasonOptions
+                    .map(
+                      (reason) => DropdownMenuItem<String>(
+                        value: reason,
+                        child: Text(reason),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value == null) {
+                    return;
+                  }
+                  setState(() {
+                    _selectedReason = value;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildChecklistSection(
+                title: 'Tecnologias faltantes',
+                options: widget.vacancyForm.technologies,
+                selectedValues: _missingTechnologies,
+                onToggle: (value, enabled) {
+                  setState(() {
+                    if (enabled) {
+                      _missingTechnologies.add(value);
+                    } else {
+                      _missingTechnologies.remove(value);
+                    }
+                  });
+                },
+                emptyText: 'La vacante no tiene tecnologias registradas.',
+              ),
+              const SizedBox(height: 12),
+              _buildChecklistSection(
+                title: 'Responsabilidades no cumplidas',
+                options: widget.vacancyForm.responsibilities,
+                selectedValues: _missingResponsibilities,
+                onToggle: (value, enabled) {
+                  setState(() {
+                    if (enabled) {
+                      _missingResponsibilities.add(value);
+                    } else {
+                      _missingResponsibilities.remove(value);
+                    }
+                  });
+                },
+                emptyText:
+                    'La vacante no tiene responsabilidades registradas.',
+              ),
+              const SizedBox(height: 12),
+              _buildChecklistSection(
+                title: 'Requisitos tecnicos no cumplidos',
+                options: widget.vacancyForm.technicalRequirements,
+                selectedValues: _missingTechnicalRequirements,
+                onToggle: (value, enabled) {
+                  setState(() {
+                    if (enabled) {
+                      _missingTechnicalRequirements.add(value);
+                    } else {
+                      _missingTechnicalRequirements.remove(value);
+                    }
+                  });
+                },
+                emptyText: 'La vacante no tiene requisitos tecnicos registrados.',
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedExperienceLevel,
+                decoration: const InputDecoration(
+                  labelText: 'Nivel de experiencia requerido',
+                  border: OutlineInputBorder(),
+                ),
+                items: const <MapEntry<String, String>>[
+                  MapEntry<String, String>('JUNIOR', 'Junior'),
+                  MapEntry<String, String>('SEMI_SENIOR', 'Semi-Senior'),
+                  MapEntry<String, String>('SENIOR', 'Senior'),
+                ]
+                    .map(
+                      (entry) => DropdownMenuItem<String>(
+                        value: entry.key,
+                        child: Text(entry.value),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value == null) {
+                    return;
+                  }
+                  setState(() {
+                    _selectedExperienceLevel = value;
+                  });
+                },
+              ),
+              if (aiSummaryValue.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Resumen IA de comparacion',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1E40AF),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        aiSummaryValue,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF1E3A8A),
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _commentController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Comentario adicional',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cancelar'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).pop(
+                          CompanyDecisionPayload(
+                            rejectionReason: _selectedReason,
+                            missingTechnologies: _missingTechnologies.toList(
+                              growable: false,
+                            ),
+                            missingResponsibilities:
+                                _missingResponsibilities.toList(
+                              growable: false,
+                            ),
+                            missingTechnicalRequirements:
+                                _missingTechnicalRequirements.toList(
+                              growable: false,
+                            ),
+                            expectedExperienceLevel: _selectedExperienceLevel,
+                            aiSummary: aiSummaryValue,
+                            rejectionComment: _commentController.text.trim(),
+                          ),
+                        );
+                      },
+                      child: const Text('Guardar rechazo'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Widget _buildChecklistSection({
+  required String title,
+  required List<String> options,
+  required Set<String> selectedValues,
+  required void Function(String value, bool enabled) onToggle,
+  required String emptyText,
+}) {
+  final List<String> cleanedOptions = options
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .toSet()
+      .toList(growable: false);
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        title,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF334155),
+        ),
+      ),
+      const SizedBox(height: 8),
+      if (cleanedOptions.isEmpty)
+        Text(
+          emptyText,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+        )
+      else
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: cleanedOptions.map((option) {
+            final bool selected = selectedValues.contains(option);
+            return FilterChip(
+              label: Text(option),
+              selected: selected,
+              onSelected: (enabled) => onToggle(option, enabled),
+            );
+          }).toList(growable: false),
+        ),
+    ],
+  );
 }
