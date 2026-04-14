@@ -2,10 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../config/theme.dart';
+import '../controllers/user_provider.dart';
+import '../models/vacancy_model.dart';
+import '../services/secure_token_storage.dart';
 import '../services/vacancy_service.dart';
 
 class CreateVacancySection extends StatefulWidget {
-  const CreateVacancySection({super.key});
+  const CreateVacancySection({
+    super.key,
+    this.editingVacancyId,
+    this.jwt,
+    this.userProvider,
+    this.initialVacancyData,
+  });
+
+  final int? editingVacancyId;
+  final String? jwt;
+  final UserProvider? userProvider;
+  final VacancyFormData? initialVacancyData;
 
   @override
   State<CreateVacancySection> createState() => _CreateVacancySectionState();
@@ -14,6 +28,7 @@ class CreateVacancySection extends StatefulWidget {
 class _CreateVacancySectionState extends State<CreateVacancySection> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final VacancyService _vacancyService = VacancyService();
+  final SecureTokenStorage _tokenStorage = SecureTokenStorage();
 
   // -- Text controllers --
   final TextEditingController _titleController = TextEditingController();
@@ -75,6 +90,62 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
     'Telecomunicaciones': 'Telecomunicaciones',
     'Otro': 'Otro',
   };
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialVacancyData != null) {
+      _applyVacancyData(widget.initialVacancyData!);
+    } else if (widget.editingVacancyId != null) {
+      _loadVacancyData();
+    }
+  }
+
+  void _applyVacancyData(VacancyFormData vacancy) {
+    _titleController.text = vacancy.title;
+    _descriptionController.text = vacancy.description;
+    _locationController.text = vacancy.location;
+    _sector = vacancy.sector;
+    _modality = vacancy.modality;
+    _employmentType = vacancy.employmentType;
+    _experienceLevel = vacancy.experienceLevel;
+    _technologies = List<String>.from(vacancy.technologies);
+    _softSkills = List<String>.from(vacancy.softSkills);
+    _responsibilities = vacancy.responsibilities.isNotEmpty
+        ? List<String>.from(vacancy.responsibilities)
+        : [''];
+    _technicalRequirements = vacancy.technicalRequirements.isNotEmpty
+        ? List<String>.from(vacancy.technicalRequirements)
+        : [''];
+    _minSalaryController.text = vacancy.minSalary.toStringAsFixed(0);
+    _maxSalaryController.text = vacancy.maxSalary.toStringAsFixed(0);
+    _benefits = List<String>.from(vacancy.benefits);
+  }
+
+  Future<void> _loadVacancyData() async {
+    try {
+      final String jwt = widget.jwt ?? await _tokenStorage.readToken() ?? '';
+      final vacancy = await _vacancyService.getVacancyById(
+        jwt: jwt,
+        vacancyId: widget.editingVacancyId!,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _applyVacancyData(vacancy);
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar la vacante: $e'),
+            backgroundColor: JobSwipeTheme.errorRed,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -142,7 +213,8 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
                   value: _modality,
                   options: _modalityOptions,
                   onChanged: (v) => setState(() => _modality = v),
-                  validator: (v) => v == null ? 'Selecciona una modalidad' : null,
+                  validator: (v) =>
+                      v == null ? 'Selecciona una modalidad' : null,
                 ),
                 _buildDropdown(
                   label: 'Tipo de empleo',
@@ -150,7 +222,8 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
                   value: _employmentType,
                   options: _employmentOptions,
                   onChanged: (v) => setState(() => _employmentType = v),
-                  validator: (v) => v == null ? 'Selecciona el tipo de empleo' : null,
+                  validator: (v) =>
+                      v == null ? 'Selecciona el tipo de empleo' : null,
                 ),
                 _buildDropdown(
                   label: 'Nivel de experiencia',
@@ -158,7 +231,8 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
                   value: _experienceLevel,
                   options: _experienceOptions,
                   onChanged: (v) => setState(() => _experienceLevel = v),
-                  validator: (v) => v == null ? 'Selecciona el nivel requerido' : null,
+                  validator: (v) =>
+                      v == null ? 'Selecciona el nivel requerido' : null,
                 ),
                 _buildSalaryRow(),
               ],
@@ -193,7 +267,8 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
                   hint: 'Ej: Diseñar e implementar APIs REST...',
                   icon: Icons.task_alt_outlined,
                   items: _responsibilities,
-                  onChanged: (items) => setState(() => _responsibilities = items),
+                  onChanged: (items) =>
+                      setState(() => _responsibilities = items),
                 ),
                 const SizedBox(height: 16),
                 _buildDynamicList(
@@ -201,7 +276,8 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
                   hint: 'Ej: 3+ años de experiencia en Java...',
                   icon: Icons.verified_outlined,
                   items: _technicalRequirements,
-                  onChanged: (items) => setState(() => _technicalRequirements = items),
+                  onChanged: (items) =>
+                      setState(() => _technicalRequirements = items),
                 ),
               ],
             ),
@@ -232,19 +308,60 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Publicar Vacante',
-          style: TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF6366F1),
-            letterSpacing: -0.5,
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: JobSwipeTheme.borderColor),
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Completa los campos para que los candidatos ideales encuentren tu oferta.',
-          style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.work_outline_rounded,
+                  color: JobSwipeTheme.primaryIndigo,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.editingVacancyId != null
+                          ? 'Editar vacante'
+                          : 'Formulario de vacante',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: JobSwipeTheme.primaryIndigo,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.editingVacancyId != null
+                          ? 'Ajusta la publicación sin cambiar el estilo de la app.'
+                          : 'Completa los campos para atraer candidatos con el mismo tono visual del registro.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade600,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -344,7 +461,11 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
         validator: validator,
         onChanged: onChanged,
         isExpanded: true,
-        decoration: _inputDecoration(label: label, hint: 'Seleccionar...', icon: icon),
+        decoration: _inputDecoration(
+          label: label,
+          hint: 'Seleccionar...',
+          icon: icon,
+        ),
         items: options.entries
             .map(
               (entry) => DropdownMenuItem<String>(
@@ -365,15 +486,19 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
         children: [
           Row(
             children: [
-              Icon(Icons.attach_money_rounded,
-                  size: 16, color: Colors.grey.shade500),
+              Icon(
+                Icons.attach_money_rounded,
+                size: 16,
+                color: Colors.grey.shade500,
+              ),
               const SizedBox(width: 6),
               Text(
                 'Rango salarial mensual (COP)',
                 style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w600),
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -441,9 +566,10 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
             Text(
               label,
               style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w600),
+                fontSize: 12,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),
@@ -455,8 +581,10 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
             children: tags
                 .map(
                   (tag) => Chip(
-                    label: Text(tag,
-                        style: const TextStyle(fontSize: 12, color: Colors.white)),
+                    label: Text(
+                      tag,
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                    ),
                     backgroundColor: JobSwipeTheme.primaryIndigo,
                     deleteIconColor: Colors.white70,
                     deleteIcon: const Icon(Icons.close, size: 14),
@@ -477,15 +605,18 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
             Expanded(
               child: TextField(
                 controller: tagController,
-                decoration: _inputDecoration(
-                  label: '',
-                  hint: hint,
-                  icon: Icons.add,
-                ).copyWith(
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  isDense: true,
-                ),
+                decoration:
+                    _inputDecoration(
+                      label: '',
+                      hint: hint,
+                      icon: Icons.add,
+                    ).copyWith(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      isDense: true,
+                    ),
                 onSubmitted: addTag,
               ),
             ),
@@ -525,18 +656,19 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
             Text(
               label,
               style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w600),
+                fontSize: 12,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),
         const SizedBox(height: 8),
         ...List.generate(items.length, (index) {
-          final TextEditingController ctrl =
-              TextEditingController(text: items[index]);
-          ctrl.selection =
-              TextSelection.collapsed(offset: ctrl.text.length);
+          final TextEditingController ctrl = TextEditingController(
+            text: items[index],
+          );
+          ctrl.selection = TextSelection.collapsed(offset: ctrl.text.length);
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Row(
@@ -553,24 +685,28 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
                     child: Text(
                       '${index + 1}',
                       style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: JobSwipeTheme.primaryIndigo),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: JobSwipeTheme.primaryIndigo,
+                      ),
                     ),
                   ),
                 ),
                 Expanded(
                   child: TextFormField(
                     controller: ctrl,
-                    decoration: _inputDecoration(
-                      label: '',
-                      hint: hint,
-                      icon: Icons.drag_indicator,
-                    ).copyWith(
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                      isDense: true,
-                    ),
+                    decoration:
+                        _inputDecoration(
+                          label: '',
+                          hint: hint,
+                          icon: Icons.drag_indicator,
+                        ).copyWith(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          isDense: true,
+                        ),
                     onChanged: (value) {
                       final List<String> updated = List.from(items);
                       updated[index] = value;
@@ -580,8 +716,11 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
                 ),
                 if (items.length > 1)
                   IconButton(
-                    icon: Icon(Icons.remove_circle_outline,
-                        color: Colors.red.shade400, size: 20),
+                    icon: Icon(
+                      Icons.remove_circle_outline,
+                      color: Colors.red.shade400,
+                      size: 20,
+                    ),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                     onPressed: () {
@@ -596,12 +735,14 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
         }),
         TextButton.icon(
           onPressed: () => onChanged([...items, '']),
-          icon: Icon(Icons.add_circle_outline,
-              size: 16, color: JobSwipeTheme.primaryIndigo),
+          icon: Icon(
+            Icons.add_circle_outline,
+            size: 16,
+            color: JobSwipeTheme.primaryIndigo,
+          ),
           label: Text(
             'Agregar ítem',
-            style: TextStyle(
-                fontSize: 13, color: JobSwipeTheme.primaryIndigo),
+            style: TextStyle(fontSize: 13, color: JobSwipeTheme.primaryIndigo),
           ),
           style: TextButton.styleFrom(padding: EdgeInsets.zero),
         ),
@@ -610,6 +751,11 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
   }
 
   Widget _buildSubmitButton() {
+    final isEditing = widget.editingVacancyId != null;
+    final label = isEditing
+        ? (_isSubmitting ? 'Actualizando...' : 'Actualizar Vacante')
+        : (_isSubmitting ? 'Publicando...' : 'Publicar Vacante');
+
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
@@ -619,19 +765,27 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
                 width: 18,
                 height: 18,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white),
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
               )
-            : const Icon(Icons.rocket_launch_rounded),
+            : Icon(
+                isEditing ? Icons.save_rounded : Icons.rocket_launch_rounded,
+              ),
         label: Text(
-          _isSubmitting ? 'Publicando...' : 'Publicar Vacante',
+          label,
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
         ),
         style: ElevatedButton.styleFrom(
           minimumSize: const Size.fromHeight(56),
           backgroundColor: JobSwipeTheme.primaryIndigo,
           foregroundColor: Colors.white,
-          disabledBackgroundColor: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          disabledBackgroundColor: JobSwipeTheme.primaryIndigo.withValues(
+            alpha: 0.5,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           elevation: 0,
         ),
       ),
@@ -661,8 +815,7 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide:
-            BorderSide(color: JobSwipeTheme.primaryIndigo, width: 1.8),
+        borderSide: BorderSide(color: JobSwipeTheme.primaryIndigo, width: 1.8),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -678,12 +831,14 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
   // ───────────────────────────── VALIDATORS ─────────────────────────────
 
   String? _requiredValidator(String? value) {
-    if (value == null || value.trim().isEmpty) return 'Este campo es obligatorio';
+    if (value == null || value.trim().isEmpty)
+      return 'Este campo es obligatorio';
     return null;
   }
 
   String? _salaryValidator(String? value) {
-    if (value == null || value.trim().isEmpty) return 'Ingresa el salario mínimo';
+    if (value == null || value.trim().isEmpty)
+      return 'Ingresa el salario mínimo';
     final double? amount = double.tryParse(value.trim());
     if (amount == null || amount < 0) return 'Ingresa un monto válido';
     return null;
@@ -704,15 +859,19 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
     if (_isSubmitting) return;
     if (!_formKey.currentState!.validate()) return;
 
-    final List<String> cleanResponsibilities =
-        _responsibilities.where((s) => s.trim().isNotEmpty).toList();
-    final List<String> cleanRequirements =
-        _technicalRequirements.where((s) => s.trim().isNotEmpty).toList();
+    final List<String> cleanResponsibilities = _responsibilities
+        .where((s) => s.trim().isNotEmpty)
+        .toList();
+    final List<String> cleanRequirements = _technicalRequirements
+        .where((s) => s.trim().isNotEmpty)
+        .toList();
 
     setState(() => _isSubmitting = true);
 
     try {
-      await _vacancyService.createVacancy(VacancyFormData(
+      final String jwt = widget.jwt ?? await _tokenStorage.readToken() ?? '';
+
+      final VacancyFormData formData = VacancyFormData(
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         location: _locationController.text.trim(),
@@ -727,23 +886,43 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
         minSalary: double.parse(_minSalaryController.text.trim()),
         maxSalary: double.parse(_maxSalaryController.text.trim()),
         benefits: _benefits,
-      ));
+      );
+
+      if (widget.editingVacancyId != null) {
+        await _vacancyService.updateVacancy(
+          jwt: jwt,
+          vacancyId: widget.editingVacancyId!,
+          data: formData,
+        );
+      } else {
+        await _vacancyService.createVacancy(formData);
+      }
 
       if (!mounted) return;
 
+      final isEditing = widget.editingVacancyId != null;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('¡Vacante publicada exitosamente!'),
-          backgroundColor: Color(0xFF10B981),
+        SnackBar(
+          content: Text(
+            isEditing
+                ? '¡Vacante actualizada exitosamente!'
+                : '¡Vacante publicada exitosamente!',
+          ),
+          backgroundColor: JobSwipeTheme.successGreen,
         ),
       );
-      _resetForm();
+
+      if (isEditing) {
+        Navigator.pop(context, true);
+      } else {
+        _resetForm();
+      }
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(error.toString()),
-          backgroundColor: const Color(0xFFEF4444),
+          backgroundColor: JobSwipeTheme.errorRed,
         ),
       );
     } finally {
