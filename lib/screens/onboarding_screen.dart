@@ -455,7 +455,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Completa tu registro'),
-        backgroundColor: JobSwipeTheme.primaryBlue,
+        backgroundColor: JobSwipeTheme.primaryIndigo,
         foregroundColor: Colors.white,
         actions: <Widget>[
           TextButton(
@@ -487,7 +487,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     border: Border.all(color: JobSwipeTheme.borderColor),
                     boxShadow: <BoxShadow>[
                       BoxShadow(
-                        color: JobSwipeTheme.primaryBlue.withValues(
+                        color: JobSwipeTheme.primaryIndigo.withValues(
                           alpha: 0.08,
                         ),
                         blurRadius: 24,
@@ -574,9 +574,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 : _submit,
                             style: ElevatedButton.styleFrom(
                               minimumSize: const Size.fromHeight(54),
-                              backgroundColor: JobSwipeTheme.primaryBlue,
+                              backgroundColor: JobSwipeTheme.primaryIndigo,
                               foregroundColor: Colors.white,
-                              disabledBackgroundColor: JobSwipeTheme.primaryBlue
+                              disabledBackgroundColor: JobSwipeTheme
+                                  .primaryIndigo
                                   .withValues(alpha: 0.45),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
@@ -613,7 +614,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: JobSwipeTheme.primaryBlue.withValues(alpha: 0.18),
+            color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.18),
             blurRadius: 26,
             offset: const Offset(0, 12),
           ),
@@ -678,19 +679,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: selected
-              ? JobSwipeTheme.primaryBlue.withValues(alpha: 0.06)
+              ? JobSwipeTheme.primaryIndigo.withValues(alpha: 0.06)
               : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: selected
-                ? JobSwipeTheme.primaryBlue
+                ? JobSwipeTheme.primaryIndigo
                 : JobSwipeTheme.borderColor,
             width: selected ? 1.6 : 1,
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
               color: selected
-                  ? JobSwipeTheme.primaryBlue.withValues(alpha: 0.12)
+                  ? JobSwipeTheme.primaryIndigo.withValues(alpha: 0.12)
                   : Colors.black.withValues(alpha: 0.03),
               blurRadius: 14,
               offset: const Offset(0, 6),
@@ -702,7 +703,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Icon(
               icon,
               color: selected
-                  ? JobSwipeTheme.primaryBlue
+                  ? JobSwipeTheme.primaryIndigo
                   : Colors.grey.shade600,
             ),
             const SizedBox(height: 8),
@@ -711,7 +712,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               style: TextStyle(
                 fontWeight: FontWeight.w800,
                 color: selected
-                    ? JobSwipeTheme.primaryBlue
+                    ? JobSwipeTheme.primaryIndigo
                     : const Color(0xFF0F172A),
               ),
             ),
@@ -869,7 +870,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           border: Border.all(color: JobSwipeTheme.borderColor),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: JobSwipeTheme.primaryBlue.withValues(alpha: 0.06),
+              color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.06),
               blurRadius: 14,
               offset: const Offset(0, 6),
             ),
@@ -884,12 +885,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: JobSwipeTheme.primaryBlue.withValues(alpha: 0.1),
+                    color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     Icons.upload_file_rounded,
-                    color: JobSwipeTheme.primaryBlue,
+                    color: JobSwipeTheme.primaryIndigo,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -970,7 +971,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ElevatedButton(
               onPressed: _addLink,
               style: ElevatedButton.styleFrom(
-                backgroundColor: JobSwipeTheme.primaryBlue,
+                backgroundColor: JobSwipeTheme.primaryIndigo,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
@@ -1546,7 +1547,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ElevatedButton(
               onPressed: _addSkill,
               style: ElevatedButton.styleFrom(
-                backgroundColor: JobSwipeTheme.primaryBlue,
+                backgroundColor: JobSwipeTheme.primaryIndigo,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
@@ -1569,14 +1570,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     label: Text(
                       skill,
                       style: TextStyle(
-                        color: JobSwipeTheme.primaryBlue,
+                        color: JobSwipeTheme.primaryIndigo,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    backgroundColor: JobSwipeTheme.primaryBlue.withValues(
+                    backgroundColor: JobSwipeTheme.primaryIndigo.withValues(
                       alpha: 0.1,
                     ),
-                    deleteIconColor: JobSwipeTheme.primaryBlue,
+                    deleteIconColor: JobSwipeTheme.primaryIndigo,
                     onDeleted: () =>
                         setState(() => _candidateSkills.remove(skill)),
                   ),
@@ -1647,14 +1648,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       label: Text(
                         language,
                         style: TextStyle(
-                          color: JobSwipeTheme.primaryBlue,
+                          color: JobSwipeTheme.primaryIndigo,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      backgroundColor: JobSwipeTheme.primaryBlue.withValues(
+                      backgroundColor: JobSwipeTheme.primaryIndigo.withValues(
                         alpha: 0.1,
                       ),
-                      deleteIconColor: JobSwipeTheme.primaryBlue,
+                      deleteIconColor: JobSwipeTheme.primaryIndigo,
                       onDeleted: () =>
                           setState(() => _selectedLanguages.remove(language)),
                     ),
@@ -1699,7 +1700,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 border: Border.all(color: JobSwipeTheme.borderColor),
                 boxShadow: <BoxShadow>[
                   BoxShadow(
-                    color: JobSwipeTheme.primaryBlue.withValues(alpha: 0.05),
+                    color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.05),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -2043,7 +2044,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: JobSwipeTheme.primaryBlue, width: 1.8),
+        borderSide: BorderSide(color: JobSwipeTheme.primaryIndigo, width: 1.8),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
