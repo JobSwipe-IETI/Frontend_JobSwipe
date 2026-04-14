@@ -84,17 +84,42 @@ class _EmployerVacanciesScreenState extends State<EmployerVacanciesScreen>
         _vacancies = vacancies;
         _isLoading = false;
       });
-    } catch (error) {
+    } on VacancyException catch (error) {
+      if (!mounted) return;
+
+      if (_isEmptyVacanciesScenario(error.message)) {
+        setState(() {
+          _vacancies = const <VacancyModel>[];
+          _error = null;
+          _isLoading = false;
+        });
+        return;
+      }
+
+      setState(() {
+        _error = error.message;
+        _isLoading = false;
+      });
+    } catch (_) {
       if (!mounted) return;
 
       setState(() {
-        _error = error.toString();
+        _error = 'No se pudieron cargar tus vacantes en este momento.';
         _isLoading = false;
       });
     } finally {
       _loadingTicker?.cancel();
       _loadingTicker = null;
     }
+  }
+
+  bool _isEmptyVacanciesScenario(String message) {
+    final String normalized = message.toLowerCase();
+    return normalized.contains('404') ||
+        normalized.contains('not found') ||
+        normalized.contains('no hay') ||
+        normalized.contains('sin vacantes') ||
+        normalized.contains('vacante no fue encontrada');
   }
 
   Future<void> _editVacancy(VacancyModel vacancy) async {

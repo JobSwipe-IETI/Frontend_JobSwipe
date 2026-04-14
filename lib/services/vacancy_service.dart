@@ -37,7 +37,6 @@ class VacancyService {
           .get(
             uri,
             headers: <String, String>{
-              'Authorization': 'Bearer $jwt',
               'Content-Type': 'application/json',
             },
           )
@@ -262,6 +261,10 @@ class VacancyService {
         .timeout(const Duration(seconds: 20));
 
     if (response.statusCode == 200) {
+      if (response.body.trim().isEmpty) {
+        return const <VacancyModel>[];
+      }
+
       final dynamic decoded = jsonDecode(response.body);
       if (decoded is! List) {
         throw const VacancyException('Formato inválido de vacantes.');
@@ -272,6 +275,10 @@ class VacancyService {
           .map(_mapExploreVacancy)
           .take(limit)
           .toList(growable: false);
+    }
+
+    if (_isEmptyCollectionResponse(response.statusCode)) {
+      return const <VacancyModel>[];
     }
 
     if (response.statusCode == 401) {
@@ -350,6 +357,10 @@ class VacancyService {
     }
 
     if (response.statusCode == 200) {
+      if (response.body.trim().isEmpty) {
+        return const <VacancyModel>[];
+      }
+
       final dynamic decoded = jsonDecode(response.body);
       if (decoded is! List) {
         throw const VacancyException('Formato inválido de vacantes.');
@@ -359,6 +370,11 @@ class VacancyService {
           .whereType<Map<String, dynamic>>()
           .map(_mapCompanyVacancy)
           .toList(growable: false);
+    }
+
+    if (_isEmptyCollectionResponse(response.statusCode) ||
+        response.statusCode == 500) {
+      return const <VacancyModel>[];
     }
 
     if (response.statusCode == 401) {
@@ -398,6 +414,10 @@ class VacancyService {
     }
 
     if (response.statusCode == 200) {
+      if (response.body.trim().isEmpty) {
+        return const <CompanyLikeActivity>[];
+      }
+
       final dynamic decoded = jsonDecode(response.body);
       if (decoded is! List) {
         throw const VacancyException('Formato inválido de actividad de likes.');
@@ -407,6 +427,11 @@ class VacancyService {
           .whereType<Map<String, dynamic>>()
           .map(CompanyLikeActivity.fromJson)
           .toList(growable: false);
+    }
+
+    if (_isEmptyCollectionResponse(response.statusCode) ||
+        response.statusCode == 500) {
+      return const <CompanyLikeActivity>[];
     }
 
     if (response.statusCode == 401) {
@@ -445,6 +470,10 @@ class VacancyService {
     }
 
     if (response.statusCode == 200) {
+      if (response.body.trim().isEmpty) {
+        return const <CompanyVacancyPipelineItem>[];
+      }
+
       final dynamic decoded = jsonDecode(response.body);
       if (decoded is! List) {
         throw const VacancyException(
@@ -456,6 +485,11 @@ class VacancyService {
           .whereType<Map<String, dynamic>>()
           .map(CompanyVacancyPipelineItem.fromJson)
           .toList(growable: false);
+    }
+
+    if (_isEmptyCollectionResponse(response.statusCode) ||
+        response.statusCode == 500) {
+      return const <CompanyVacancyPipelineItem>[];
     }
 
     if (response.statusCode == 401) {
@@ -521,6 +555,179 @@ class VacancyService {
 
     throw VacancyException(
       'No se pudieron cargar postulados (${response.statusCode}).',
+    );
+  }
+
+  Future<CompanyCandidateDecisionResult> registerCompanyCandidateDecision({
+    required String jwt,
+    required int vacancyId,
+    required int candidateId,
+    required SwipeDecision decision,
+    CompanyDecisionPayload? payload,
+  }) async {
+    final Uri uri = Uri.parse(
+      '${AppConfig.backendBaseUrl}/vacancies/company/vacancies/$vacancyId/candidates/$candidateId/decision',
+    );
+
+    final Map<String, dynamic> body = <String, dynamic>{
+      'decision': decision == SwipeDecision.like ? 'LIKE' : 'DISLIKE',
+      ...?payload?.toJson(),
+    };
+
+    final http.Response response = await _client
+        .post(
+          uri,
+          headers: <String, String>{
+            'Authorization': 'Bearer $jwt',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 200) {
+      final dynamic decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const VacancyException('Formato invalido de decision de empresa.');
+      }
+      return CompanyCandidateDecisionResult.fromJson(decoded);
+    }
+
+    if (response.statusCode == 400) {
+      throw const VacancyException('No se pudo guardar la decision de empresa.');
+    }
+
+    if (response.statusCode == 404) {
+      throw const VacancyException(
+        'No se encontro la vacante o el candidato para registrar la decision.',
+      );
+    }
+
+    throw VacancyException(
+      'No se pudo guardar la decision (${response.statusCode}).',
+    );
+  }
+
+  Future<List<CandidateApplicationItem>> getCandidateApplications({
+    required String jwt,
+    int limit = 30,
+  }) async {
+    final Uri uri = Uri.parse(
+      '${AppConfig.backendBaseUrl}/vacancies/applications',
+    ).replace(queryParameters: <String, String>{'limit': limit.toString()});
+
+    late final http.Response response;
+    try {
+      response = await _client
+          .get(
+            uri,
+            headers: <String, String>{
+              'Authorization': 'Bearer $jwt',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 20));
+    } on TimeoutException {
+      throw const VacancyException(
+        'La carga de postulaciones está tardando más de lo normal.',
+      );
+    }
+
+    if (response.statusCode == 200) {
+      if (response.body.trim().isEmpty) {
+        return const <CandidateApplicationItem>[];
+      }
+
+      final dynamic decoded = jsonDecode(response.body);
+      if (decoded is! List) {
+        throw const VacancyException('Formato inválido de postulaciones.');
+      }
+
+      return decoded
+          .whereType<Map<String, dynamic>>()
+          .map(CandidateApplicationItem.fromJson)
+          .toList(growable: false);
+    }
+
+    if (_isEmptyCollectionResponse(response.statusCode)) {
+      return const <CandidateApplicationItem>[];
+    }
+
+    if (response.statusCode == 401) {
+      throw const VacancyException(
+        'Tu sesion expiro. Inicia sesion nuevamente.',
+      );
+    }
+
+    throw VacancyException(
+      'No se pudieron cargar tus postulaciones (${response.statusCode}).',
+    );
+  }
+
+  Future<List<UserMatchItem>> getMatches({
+    required String jwt,
+    int limit = 20,
+  }) async {
+    final Uri uri = Uri.parse(
+      '${AppConfig.backendBaseUrl}/vacancies/matches',
+    ).replace(queryParameters: <String, String>{'limit': limit.toString()});
+
+    late final http.Response response;
+    try {
+      response = await _client
+          .get(
+            uri,
+            headers: <String, String>{
+              'Authorization': 'Bearer $jwt',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 20));
+    } on TimeoutException {
+      throw const VacancyException(
+        'La carga de matches está tardando más de lo normal. Intenta de nuevo.',
+      );
+    } catch (_) {
+      throw const VacancyException(
+        'No se pudo conectar para cargar tus matches.',
+      );
+    }
+
+    if (response.statusCode == 200) {
+      if (response.body.trim().isEmpty) {
+        return const <UserMatchItem>[];
+      }
+
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(response.body);
+      } catch (_) {
+        throw const VacancyException('Respuesta inválida al consultar matches.');
+      }
+
+      if (decoded is! List) {
+        throw const VacancyException('Formato invalido de matches.');
+      }
+
+      return decoded
+          .whereType<Map<String, dynamic>>()
+          .map(UserMatchItem.fromJson)
+          .toList(growable: false);
+    }
+
+    if (_isEmptyCollectionResponse(response.statusCode) ||
+        response.statusCode == 500) {
+      return const <UserMatchItem>[];
+    }
+
+    if (response.statusCode == 401) {
+      throw const VacancyException(
+        'Tu sesion expiro. Inicia sesion nuevamente.',
+      );
+    }
+
+    throw VacancyException(
+      'No se pudieron cargar tus matches (${response.statusCode}).',
     );
   }
 
@@ -800,6 +1007,10 @@ class VacancyService {
     }
     return null;
   }
+
+  bool _isEmptyCollectionResponse(int statusCode) {
+    return statusCode == 204 || statusCode == 404;
+  }
 }
 
 class VacancyFormData {
@@ -836,6 +1047,14 @@ class VacancyFormData {
   final List<String> benefits;
 
   factory VacancyFormData.fromJson(Map<String, dynamic> json) {
+    String normalizeExperienceLevel(String? value) {
+      final String normalized = value?.toUpperCase() ?? 'JUNIOR';
+      if (normalized == 'MID') {
+        return 'SEMI_SENIOR';
+      }
+      return normalized;
+    }
+
     return VacancyFormData(
       title: json['title']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
@@ -843,7 +1062,9 @@ class VacancyFormData {
       sector: json['sector']?.toString() ?? 'Otro',
       modality: json['modality']?.toString() ?? 'REMOTE',
       employmentType: json['employmentType']?.toString() ?? 'FULL_TIME',
-      experienceLevel: json['experienceLevel']?.toString() ?? 'JUNIOR',
+      experienceLevel: normalizeExperienceLevel(
+        json['experienceLevel']?.toString(),
+      ),
       technologies: _asStringList(json['technologies']),
       softSkills: _asStringList(json['softSkills']),
       responsibilities: _asStringList(json['responsibilities']),
@@ -989,6 +1210,180 @@ class VacancyException implements Exception {
 
   @override
   String toString() => message;
+}
+
+class CompanyCandidateDecisionResult {
+  CompanyCandidateDecisionResult({
+    required this.companyId,
+    required this.candidateId,
+    required this.vacancyId,
+    required this.matched,
+  });
+
+  final int companyId;
+  final int candidateId;
+  final int vacancyId;
+  final bool matched;
+
+  static CompanyCandidateDecisionResult fromJson(Map<String, dynamic> json) {
+    return CompanyCandidateDecisionResult(
+      companyId: CompanyLikeActivity._toInt(json['companyId']),
+      candidateId: CompanyLikeActivity._toInt(json['candidateId']),
+      vacancyId: CompanyLikeActivity._toInt(json['vacancyId']),
+      matched: json['matched'] == true,
+    );
+  }
+}
+
+class CompanyDecisionPayload {
+  CompanyDecisionPayload({
+    this.rejectionReason,
+    this.missingTechnologies = const <String>[],
+    this.missingResponsibilities = const <String>[],
+    this.missingTechnicalRequirements = const <String>[],
+    this.expectedExperienceLevel,
+    this.aiSummary,
+    this.rejectionComment,
+  });
+
+  final String? rejectionReason;
+  final List<String> missingTechnologies;
+  final List<String> missingResponsibilities;
+  final List<String> missingTechnicalRequirements;
+  final String? expectedExperienceLevel;
+  final String? aiSummary;
+  final String? rejectionComment;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      if (rejectionReason != null && rejectionReason!.trim().isNotEmpty)
+        'rejectionReason': rejectionReason,
+      if (missingTechnologies.isNotEmpty)
+        'missingTechnologies': missingTechnologies,
+      if (missingResponsibilities.isNotEmpty)
+        'missingResponsibilities': missingResponsibilities,
+      if (missingTechnicalRequirements.isNotEmpty)
+        'missingTechnicalRequirements': missingTechnicalRequirements,
+      if (expectedExperienceLevel != null &&
+          expectedExperienceLevel!.trim().isNotEmpty)
+        'expectedExperienceLevel': expectedExperienceLevel,
+      if (aiSummary != null && aiSummary!.trim().isNotEmpty)
+        'aiSummary': aiSummary,
+      if (rejectionComment != null && rejectionComment!.trim().isNotEmpty)
+        'rejectionComment': rejectionComment,
+    };
+  }
+}
+
+class CandidateApplicationItem {
+  CandidateApplicationItem({
+    required this.vacancyId,
+    required this.vacancyTitle,
+    required this.companyId,
+    required this.companyName,
+    required this.appliedAt,
+    required this.decision,
+    required this.decisionAt,
+    required this.matched,
+    required this.rejectionReason,
+    required this.missingTechnologies,
+    required this.missingResponsibilities,
+    required this.missingTechnicalRequirements,
+    required this.expectedExperienceLevel,
+    required this.aiSummary,
+    required this.rejectionComment,
+  });
+
+  final int vacancyId;
+  final String vacancyTitle;
+  final int companyId;
+  final String companyName;
+  final DateTime? appliedAt;
+  final String? decision;
+  final DateTime? decisionAt;
+  final bool matched;
+  final String? rejectionReason;
+  final List<String> missingTechnologies;
+  final List<String> missingResponsibilities;
+  final List<String> missingTechnicalRequirements;
+  final String? expectedExperienceLevel;
+  final String? aiSummary;
+  final String? rejectionComment;
+
+  bool get isPending => decision == null || decision!.isEmpty;
+
+  bool get isRejected => decision?.toUpperCase() == 'DISLIKE';
+
+  static CandidateApplicationItem fromJson(Map<String, dynamic> json) {
+    List<String> toStringList(dynamic value) {
+      if (value is List) {
+        return value.map((item) => item.toString()).toList(growable: false);
+      }
+      return const <String>[];
+    }
+
+    return CandidateApplicationItem(
+      vacancyId: CompanyLikeActivity._toInt(json['vacancyId']),
+      vacancyTitle: json['vacancyTitle']?.toString() ?? 'Vacante',
+      companyId: CompanyLikeActivity._toInt(json['companyId']),
+      companyName: json['companyName']?.toString() ?? 'Empresa',
+      appliedAt: CompanyLikeActivity._toDateTime(json['appliedAt']),
+      decision: json['decision']?.toString(),
+      decisionAt: CompanyLikeActivity._toDateTime(json['decisionAt']),
+      matched: json['matched'] == true,
+      rejectionReason: json['rejectionReason']?.toString(),
+      missingTechnologies: toStringList(json['missingTechnologies']),
+      missingResponsibilities: toStringList(json['missingResponsibilities']),
+      missingTechnicalRequirements: toStringList(
+        json['missingTechnicalRequirements'],
+      ),
+      expectedExperienceLevel: json['expectedExperienceLevel']?.toString(),
+      aiSummary: json['aiSummary']?.toString(),
+      rejectionComment: json['rejectionComment']?.toString(),
+    );
+  }
+}
+
+class UserMatchItem {
+  UserMatchItem({
+    required this.vacancyId,
+    required this.vacancyTitle,
+    required this.counterpartId,
+    required this.counterpartName,
+    required this.matchedAt,
+    required this.compatibilityPercentage,
+    required this.compatibilityLevel,
+  });
+
+  final int vacancyId;
+  final String vacancyTitle;
+  final int counterpartId;
+  final String counterpartName;
+  final DateTime? matchedAt;
+  final double? compatibilityPercentage;
+  final String? compatibilityLevel;
+
+  String get stableKey => '$vacancyId:$counterpartId';
+
+  static UserMatchItem fromJson(Map<String, dynamic> json) {
+    final dynamic rawPercentage = json['compatibilityPercentage'];
+    double? compatibilityPercentage;
+    if (rawPercentage is num) {
+      compatibilityPercentage = rawPercentage.toDouble();
+    } else if (rawPercentage is String) {
+      compatibilityPercentage = double.tryParse(rawPercentage);
+    }
+
+    return UserMatchItem(
+      vacancyId: CompanyLikeActivity._toInt(json['vacancyId']),
+      vacancyTitle: json['vacancyTitle']?.toString() ?? 'Vacante',
+      counterpartId: CompanyLikeActivity._toInt(json['counterpartId']),
+      counterpartName: json['counterpartName']?.toString() ?? 'Usuario',
+      matchedAt: CompanyLikeActivity._toDateTime(json['matchedAt']),
+      compatibilityPercentage: compatibilityPercentage,
+      compatibilityLevel: json['compatibilityLevel']?.toString(),
+    );
+  }
 }
 
 class RecommendationJobStatus {
