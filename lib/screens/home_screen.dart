@@ -37,7 +37,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin {
+  with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  static const int _connectionsNavIndex = 1;
+  static const int _exploreNavIndex = 0;
   int _selectedIndex = 0;
   late AnimationController _animationController;
   late PageController _pageController;
@@ -56,8 +58,17 @@ class _HomeScreenState extends State<HomeScreen>
   List<UserMatchItem> _matches = const [];
   List<CandidateApplicationItem> _candidateApplications = const [];
   final Set<String> _knownMatchKeys = <String>{};
+  final Set<String> _knownCompanyLikeKeys = <String>{};
+  final Set<String> _knownCandidateDecisionKeys = <String>{};
+  final Set<String> _unreadCandidateMatchKeys = <String>{};
+  final Set<String> _unreadCandidateRejectionKeys = <String>{};
+  final Set<String> _recentCompanyLikeKeys = <String>{};
+  final Map<int, int> _lastPipelineApplicantsByVacancy = <int, int>{};
+  final Set<int> _recentlyUpdatedPipelineVacancyIds = <int>{};
+  final Map<int, int> _recentPipelineDeltaByVacancy = <int, int>{};
   bool _isLoadingMatches = false;
   bool _isLoadingApplications = false;
+  bool _isRealtimeSyncInFlight = false;
   Future<void>? _matchesLoadInFlight;
   Future<void>? _applicationsLoadInFlight;
   String? _matchesError;
@@ -79,6 +90,9 @@ class _HomeScreenState extends State<HomeScreen>
   int _exploreProgressPercent = 0;
   String? _exploreBackendMessage;
   Timer? _exploreLoadingTicker;
+  Timer? _exploreEmptyAutoRefreshTicker;
+  Timer? _realtimeSyncTicker;
+  DateTime? _lastExploreSyncAt;
   static const List<String> _exploreLoadingMessages = <String>[
     'Cargando vacantes...',
     'Organizando la informacion del perfil...',
@@ -86,6 +100,11 @@ class _HomeScreenState extends State<HomeScreen>
   ];
   bool get _isCompanyAccount => _userProvider.isCompany;
   bool get _isCandidateAccount => _userProvider.isCandidate;
+    int get _candidateConnectionsSignalCount => _unreadCandidateMatchKeys.length;
+    int get _candidateRejectionsSignalCount =>
+      _unreadCandidateRejectionKeys.length;
+  int get _notificationBadgeNavIndex =>
+      _isCompanyAccount ? _exploreNavIndex : _connectionsNavIndex;
 
   Future<void> _showLogoutDialog() async {
     final bool? shouldLogout = await showDialog<bool>(
@@ -123,6 +142,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     // Decodificar JWT para obtener el rol
     final role =
@@ -145,14 +165,16 @@ class _HomeScreenState extends State<HomeScreen>
     _loadUserProfile();
     if (_isCandidateAccount) {
       _loadRecommendedVacancies();
+      _startExploreEmptyAutoRefreshLoop();
     }
     if (_isCompanyAccount) {
-      _loadCompanyDashboard();
+      _loadCompanyDashboard(initialLoad: true);
     }
     _loadMatches(initialLoad: true);
     if (_isCandidateAccount) {
       _loadCandidateApplications(initialLoad: true);
     }
+    _startRealtimeSyncLoop();
   }
 
   UserProfile _buildFallbackProfile(bool isCompany) {
@@ -389,12 +411,33 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _exploreLoadingTicker?.cancel();
+    _exploreEmptyAutoRefreshTicker?.cancel();
+    _realtimeSyncTicker?.cancel();
     _topNoticeTimer?.cancel();
     _topNoticeEntry?.remove();
     _pageController.dispose();
     _animationController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startRealtimeSyncLoop();
+      unawaited(_runRealtimeSync());
+      if (_shouldAutoRefreshExploreVacancies()) {
+        unawaited(_loadRecommendedVacancies());
+      }
+      return;
+    }
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      _realtimeSyncTicker?.cancel();
+    }
   }
 
   @override
@@ -439,6 +482,9 @@ class _HomeScreenState extends State<HomeScreen>
         EmployerVacanciesTabScreen(
           userProvider: _userProvider,
           jwt: widget.jwt,
+          onVacancySaved: () {
+            unawaited(_loadCompanyDashboard(silent: true));
+          },
         ),
       );
     }
@@ -482,9 +528,6 @@ class _HomeScreenState extends State<HomeScreen>
           setState(() {
             _exploreVacancies = _exploreVacancies
                 .where((item) => item.id != vacancy.id)
-          onVacancySaved: () {
-            unawaited(_loadCompanyDashboard(silent: true));
-          },
                 .toList(growable: false);
           });
 
@@ -711,13 +754,24 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildCompanyVacancyPipelineCard(CompanyVacancyPipelineItem item) {
+    final bool recentlyUpdated = _recentlyUpdatedPipelineVacancyIds.contains(
+      item.vacancyId,
+    );
+    final int delta = _recentPipelineDeltaByVacancy[item.vacancyId] ?? 0;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: recentlyUpdated
+            ? const Color(0xFFECFDF5)
+            : Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: recentlyUpdated
+              ? const Color(0xFF10B981)
+              : const Color(0xFFE2E8F0),
+        ),
       ),
       child: Row(
         children: [
@@ -758,6 +812,27 @@ class _HomeScreenState extends State<HomeScreen>
                     color: Color(0xFF64748B),
                   ),
                 ),
+                if (recentlyUpdated && delta > 0) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '+$delta nuevo${delta > 1 ? 's' : ''}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF047857),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -813,14 +888,20 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildCompanyActivityItem(CompanyLikeActivity activity) {
     final String when = _formatRelativeTime(activity.likedAt);
+    final String signalKey = _companyLikeSignalKey(activity);
+    final bool isRecentSignal = _recentCompanyLikeKeys.contains(signalKey);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isRecentSignal ? const Color(0xFFFFFBEB) : Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: isRecentSignal
+              ? const Color(0xFFF59E0B)
+              : const Color(0xFFE2E8F0),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -851,6 +932,26 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
               ),
+              if (isRecentSignal)
+                Container(
+                  margin: const EdgeInsets.only(left: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Text(
+                    'Nuevo',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFB45309),
+                    ),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 8),
@@ -917,15 +1018,20 @@ class _HomeScreenState extends State<HomeScreen>
     return 'Hace ${diff.inDays} días';
   }
 
-  Future<void> _loadCompanyDashboard() async {
+  Future<void> _loadCompanyDashboard({
+    bool initialLoad = false,
+    bool silent = false,
+  }) async {
     if (!mounted) {
       return;
     }
 
-    setState(() {
-      _isLoadingCompanyDashboard = true;
-      _companyDashboardError = null;
-    });
+    if (!silent) {
+      setState(() {
+        _isLoadingCompanyDashboard = true;
+        _companyDashboardError = null;
+      });
+    }
 
     final List<String> errors = <String>[];
     Future<T> safeLoad<T>(Future<T> future, T fallback) async {
@@ -962,6 +1068,37 @@ class _HomeScreenState extends State<HomeScreen>
     final List<CompanyLikeActivity> activity =
         results[2] as List<CompanyLikeActivity>;
 
+    final Map<int, int> previousPipeline = Map<int, int>.from(
+      _lastPipelineApplicantsByVacancy,
+    );
+    final Set<int> increasedPipelineVacancyIds = <int>{};
+    final Map<int, int> pipelineDeltaByVacancy = <int, int>{};
+    if (!initialLoad) {
+      for (final CompanyVacancyPipelineItem item in pipeline) {
+        final int previous = previousPipeline[item.vacancyId] ?? 0;
+        if (item.applicantsCount > previous) {
+          increasedPipelineVacancyIds.add(item.vacancyId);
+          pipelineDeltaByVacancy[item.vacancyId] =
+              item.applicantsCount - previous;
+        }
+      }
+    }
+
+    final Set<String> incomingLikeKeys = activity
+        .map(_companyLikeSignalKey)
+        .toSet();
+    final List<CompanyLikeActivity> newLikeItems = <CompanyLikeActivity>[];
+    int newLikeSignals = 0;
+    if (!initialLoad) {
+      for (final CompanyLikeActivity item in activity) {
+        final String key = _companyLikeSignalKey(item);
+        if (!_knownCompanyLikeKeys.contains(key)) {
+          newLikeSignals++;
+          newLikeItems.add(item);
+        }
+      }
+    }
+
     if (!mounted) {
       return;
     }
@@ -970,11 +1107,37 @@ class _HomeScreenState extends State<HomeScreen>
       _companyVacancies = vacancies;
       _companyVacancyPipeline = pipeline;
       _companyLikeActivity = activity;
+      _lastPipelineApplicantsByVacancy
+        ..clear()
+        ..addEntries(
+          pipeline.map(
+            (item) => MapEntry(item.vacancyId, item.applicantsCount),
+          ),
+        );
+      _recentlyUpdatedPipelineVacancyIds
+        ..addAll(increasedPipelineVacancyIds);
+      for (final MapEntry<int, int> entry in pipelineDeltaByVacancy.entries) {
+        final int previousDelta = _recentPipelineDeltaByVacancy[entry.key] ?? 0;
+        _recentPipelineDeltaByVacancy[entry.key] = previousDelta + entry.value;
+      }
+      _knownCompanyLikeKeys
+        ..clear()
+        ..addAll(incomingLikeKeys);
+      _recentCompanyLikeKeys
+        ..addAll(newLikeItems.map(_companyLikeSignalKey));
+      if (!initialLoad &&
+          _selectedIndex != _notificationBadgeNavIndex &&
+          newLikeSignals > 0) {
+        _matchesBadgeCount += newLikeSignals;
+      }
       _companyDashboardError = errors.length == 3
           ? 'No se pudo cargar el panel en este momento. Intenta de nuevo.'
           : null;
-      _isLoadingCompanyDashboard = false;
+      if (!silent) {
+        _isLoadingCompanyDashboard = false;
+      }
     });
+
   }
 
   Future<List<VacancyApplicant>> _loadApplicantsForVacancy(
@@ -1344,6 +1507,8 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _openApplicantsForVacancy(
     CompanyVacancyPipelineItem item,
   ) async {
+    _markCompanyVacancySignalsAsSeen(item.vacancyId);
+
     List<VacancyApplicant>? cachedApplicants = _applicantsCache[item.vacancyId];
     final Set<int> decisionInProgressCandidateIds = <int>{};
     Future<List<VacancyApplicant>>? applicantsFuture;
@@ -1407,23 +1572,18 @@ class _HomeScreenState extends State<HomeScreen>
                           return;
                         }
 
-                        if (decision == SwipeDecision.like) {
-                          setModalState(() {
-                            cachedApplicants = cachedApplicants!
-                                .where((entry) => entry.candidateId != applicant.candidateId)
-                                .toList(growable: false);
-                            decisionInProgressCandidateIds.remove(
-                              applicant.candidateId,
-                            );
-                          });
-                          _applicantsCache[item.vacancyId] = cachedApplicants!;
-                        } else {
-                          setModalState(() {
-                            decisionInProgressCandidateIds.remove(
-                              applicant.candidateId,
-                            );
-                          });
-                        }
+                        setModalState(() {
+                          cachedApplicants = cachedApplicants!
+                              .where(
+                                (entry) =>
+                                    entry.candidateId != applicant.candidateId,
+                              )
+                              .toList(growable: false);
+                          decisionInProgressCandidateIds.remove(
+                            applicant.candidateId,
+                          );
+                        });
+                        _applicantsCache[item.vacancyId] = cachedApplicants!;
 
                         if (matched) {
                           _pushImmediateMatchSignal(
@@ -1523,24 +1683,19 @@ class _HomeScreenState extends State<HomeScreen>
                               return;
                             }
 
-                            if (decision == SwipeDecision.like) {
-                              setModalState(() {
-                                cachedApplicants = applicants
-                                    .where((entry) => entry.candidateId != applicant.candidateId)
-                                    .toList(growable: false);
-                                applicantsFuture = Future.value(cachedApplicants);
-                                decisionInProgressCandidateIds.remove(
-                                  applicant.candidateId,
-                                );
-                              });
-                              _applicantsCache[item.vacancyId] = cachedApplicants!;
-                            } else {
-                              setModalState(() {
-                                decisionInProgressCandidateIds.remove(
-                                  applicant.candidateId,
-                                );
-                              });
-                            }
+                            setModalState(() {
+                              cachedApplicants = applicants
+                                  .where(
+                                    (entry) =>
+                                        entry.candidateId != applicant.candidateId,
+                                  )
+                                  .toList(growable: false);
+                              applicantsFuture = Future.value(cachedApplicants);
+                              decisionInProgressCandidateIds.remove(
+                                applicant.candidateId,
+                              );
+                            });
+                            _applicantsCache[item.vacancyId] = cachedApplicants!;
 
                             if (matched) {
                               _pushImmediateMatchSignal(
@@ -1724,6 +1879,18 @@ class _HomeScreenState extends State<HomeScreen>
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 15),
           ),
+          const SizedBox(height: 14),
+          ElevatedButton.icon(
+            onPressed: _isLoadingExplore ? null : _loadRecommendedVacancies,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Buscar nuevamente'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Actualizamos automaticamente cada 45 segundos mientras esta vista siga vacia.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          ),
         ],
       ),
     );
@@ -1731,6 +1898,9 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _loadRecommendedVacancies() async {
     if (!_isCandidateAccount) {
+      return;
+    }
+    if (_isLoadingExplore) {
       return;
     }
 
@@ -2013,6 +2183,9 @@ class _HomeScreenState extends State<HomeScreen>
         for (final String key in incomingKeys) {
           if (!_knownMatchKeys.contains(key)) {
             newCount++;
+            if (_isCandidateAccount) {
+              _unreadCandidateMatchKeys.add(key);
+            }
           }
         }
       }
@@ -2026,7 +2199,7 @@ class _HomeScreenState extends State<HomeScreen>
         _knownMatchKeys
           ..clear()
           ..addAll(incomingKeys);
-        if (initialLoad || _selectedIndex == 1) {
+        if (initialLoad || _selectedIndex == _notificationBadgeNavIndex) {
           _matchesBadgeCount = 0;
         } else if (newCount > 0) {
           _matchesBadgeCount += newCount;
@@ -2134,9 +2307,43 @@ class _HomeScreenState extends State<HomeScreen>
         return;
       }
 
+        final Set<String> incomingDecisionKeys = applications
+          .where((item) => item.isRejected)
+          .map(_candidateDecisionSignalKey)
+          .toSet();
+      int newDecisionSignals = 0;
+      if (!initialLoad) {
+        for (final String key in incomingDecisionKeys) {
+          if (!_knownCandidateDecisionKeys.contains(key)) {
+            newDecisionSignals++;
+            _unreadCandidateRejectionKeys.add(key);
+          }
+        }
+      }
+
       setState(() {
         _candidateApplications = applications;
+        _knownCandidateDecisionKeys
+          ..clear()
+          ..addAll(incomingDecisionKeys);
+        if (!initialLoad &&
+            _selectedIndex != _notificationBadgeNavIndex &&
+            newDecisionSignals > 0) {
+          _matchesBadgeCount += newDecisionSignals;
+        }
       });
+
+      if (!initialLoad &&
+          _selectedIndex != _notificationBadgeNavIndex &&
+          newDecisionSignals > 0) {
+        _showFloatingNotification(
+          newDecisionSignals == 1
+              ? 'Tu proceso en 1 vacante tuvo una actualizacion.'
+              : 'Tu proceso en $newDecisionSignals vacantes tuvo actualizaciones.',
+          icon: Icons.mark_email_unread_rounded,
+          accentColor: const Color(0xFF2563EB),
+        );
+      }
     } on VacancyException catch (e) {
       if (!mounted) {
         return;
@@ -2187,8 +2394,7 @@ class _HomeScreenState extends State<HomeScreen>
       }
 
       final CompanyCandidateDecisionResult result =
-          await _vacancyService.registerCompanyCandidateDecision(
-            jwt: widget.jwt,
+          await _submitCompanyDecisionWithSingleRetry(
             vacancyId: vacancyId,
             candidateId: applicant.candidateId,
             decision: decision,
@@ -2199,9 +2405,17 @@ class _HomeScreenState extends State<HomeScreen>
         return null;
       }
 
-      await _loadMatches();
+      unawaited(
+        _loadMatches().catchError((_) {
+          // Ignore transient sync errors after a successful decision save.
+        }),
+      );
       if (_isCompanyAccount) {
-        await _loadCompanyDashboard();
+        unawaited(
+          _loadCompanyDashboard(silent: true).catchError((_) {
+            // Ignore transient sync errors after a successful decision save.
+          }),
+        );
       }
       return result;
     } on VacancyException catch (e) {
@@ -2221,6 +2435,55 @@ class _HomeScreenState extends State<HomeScreen>
       );
       return null;
     }
+  }
+
+  Future<CompanyCandidateDecisionResult> _submitCompanyDecisionWithSingleRetry({
+    required int vacancyId,
+    required int candidateId,
+    required SwipeDecision decision,
+    CompanyDecisionPayload? payload,
+  }) async {
+    for (int attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await _vacancyService.registerCompanyCandidateDecision(
+          jwt: widget.jwt,
+          vacancyId: vacancyId,
+          candidateId: candidateId,
+          decision: decision,
+          payload: payload,
+        );
+      } on TimeoutException {
+        if (attempt == 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 350));
+          continue;
+        }
+        rethrow;
+      } on VacancyException catch (e) {
+        final bool shouldRetry =
+            attempt == 0 && _isTransientCompanyDecisionError(e.message);
+        if (shouldRetry) {
+          await Future<void>.delayed(const Duration(milliseconds: 350));
+          continue;
+        }
+        rethrow;
+      }
+    }
+
+    throw const VacancyException('No se pudo guardar la decision de empresa.');
+  }
+
+  bool _isTransientCompanyDecisionError(String message) {
+    final String normalized = message.toLowerCase();
+    return normalized.contains('(404)') ||
+        normalized.contains('(408)') ||
+        normalized.contains('(429)') ||
+        normalized.contains('(500)') ||
+        normalized.contains('(502)') ||
+        normalized.contains('(503)') ||
+        normalized.contains('(504)') ||
+        normalized.contains('timed out') ||
+        normalized.contains('tiempo de espera') ||
+        normalized.contains('error de red');
   }
 
   Future<VacancyFormData> _getVacancyFormForDecision(int vacancyId) {
@@ -2535,11 +2798,13 @@ class _HomeScreenState extends State<HomeScreen>
               Expanded(
                 child: _buildConnectionsTabButton(
                   label: 'Conexiones',
+                  signalCount: _candidateConnectionsSignalCount,
                   selected: _connectionsSectionIndex == 0,
                   onTap: () {
                     setState(() {
                       _connectionsSectionIndex = 0;
                     });
+                    _markCandidateConnectionsSignalsAsSeen();
                   },
                 ),
               ),
@@ -2547,11 +2812,13 @@ class _HomeScreenState extends State<HomeScreen>
               Expanded(
                 child: _buildConnectionsTabButton(
                   label: 'Rechazos',
+                  signalCount: _candidateRejectionsSignalCount,
                   selected: _connectionsSectionIndex == 1,
                   onTap: () {
                     setState(() {
                       _connectionsSectionIndex = 1;
                     });
+                    _markCandidateRejectionSignalsAsSeen();
                     unawaited(_loadCandidateApplications());
                   },
                 ),
@@ -2571,27 +2838,53 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildConnectionsTabButton({
     required String label,
     required bool selected,
+    int signalCount = 0,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: selected
-              ? JobSwipeTheme.primaryIndigo
-              : const Color(0xFFE2E8F0),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: selected ? Colors.white : const Color(0xFF334155),
-            fontWeight: FontWeight.w700,
-            fontSize: 13,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: selected
+                  ? JobSwipeTheme.primaryIndigo
+                  : const Color(0xFFE2E8F0),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: selected ? Colors.white : const Color(0xFF334155),
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
           ),
-        ),
+          if (!selected && signalCount > 0)
+            Positioned(
+              right: 8,
+              top: 6,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: JobSwipeTheme.errorRed,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  signalCount > 9 ? '9+' : '$signalCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -3340,7 +3633,7 @@ class _HomeScreenState extends State<HomeScreen>
               (index) => _buildNavItem(
                 icon: icons[index],
                 label: tabs[index],
-                showBadge: index == 1,
+                showBadge: index == _notificationBadgeNavIndex,
                 isSelected: _selectedIndex == index,
                 onTap: () => _onNavTap(index),
               ),
@@ -3426,10 +3719,17 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _onNavTap(int index) {
-    if (index == 1) {
+    if (index == _exploreNavIndex && _isCompanyAccount) {
+      _loadCompanyDashboard(silent: true);
+    }
+
+    if (index == _connectionsNavIndex) {
       _loadMatches();
       if (_isCandidateAccount) {
         _loadCandidateApplications();
+      }
+      if (_isCompanyAccount) {
+        _loadCompanyDashboard(silent: true);
       }
     }
 
@@ -3440,15 +3740,174 @@ class _HomeScreenState extends State<HomeScreen>
     );
     setState(() {
       _selectedIndex = index;
-      if (index == 1) {
+      if (index == _notificationBadgeNavIndex) {
         _matchesBadgeCount = 0;
       }
+    });
+
+    if (_isCandidateAccount && index == _connectionsNavIndex) {
+      if (_connectionsSectionIndex == 0) {
+        _markCandidateConnectionsSignalsAsSeen();
+      } else {
+        _markCandidateRejectionSignalsAsSeen();
+      }
+    }
+  }
+
+  void _markCandidateConnectionsSignalsAsSeen() {
+    if (_unreadCandidateMatchKeys.isEmpty) {
+      return;
+    }
+    setState(() {
+      _unreadCandidateMatchKeys.clear();
+    });
+  }
+
+  void _markCandidateRejectionSignalsAsSeen() {
+    if (_unreadCandidateRejectionKeys.isEmpty) {
+      return;
+    }
+    setState(() {
+      _unreadCandidateRejectionKeys.clear();
+    });
+  }
+
+  void _markCompanyVacancySignalsAsSeen(int vacancyId) {
+    if (!_recentlyUpdatedPipelineVacancyIds.contains(vacancyId) &&
+        !_recentPipelineDeltaByVacancy.containsKey(vacancyId) &&
+        !_recentCompanyLikeKeys.any(
+          (key) => key.startsWith('$vacancyId:'),
+        )) {
+      return;
+    }
+
+    setState(() {
+      _recentlyUpdatedPipelineVacancyIds.remove(vacancyId);
+      _recentPipelineDeltaByVacancy.remove(vacancyId);
+      _recentCompanyLikeKeys.removeWhere(
+        (key) => key.startsWith('$vacancyId:'),
+      );
     });
   }
 
   Future<void> _loadPermissions() async {
     // Ya no se necesita cargar permisos especiales
     // El tipo de usuario se obtiene del UserProvider
+  }
+
+  String _companyLikeSignalKey(CompanyLikeActivity item) {
+    return '${item.vacancyId}:${item.candidateId}:${item.likedAt?.toIso8601String() ?? 'na'}';
+  }
+
+  String _candidateDecisionSignalKey(CandidateApplicationItem item) {
+    return '${item.vacancyId}:${item.companyId}:${item.decision ?? 'NA'}:${item.decisionAt?.toIso8601String() ?? 'na'}:${item.matched}';
+  }
+
+  void _startRealtimeSyncLoop() {
+    _realtimeSyncTicker?.cancel();
+    _realtimeSyncTicker = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_runRealtimeSync());
+    });
+  }
+
+  Future<void> _runRealtimeSync() async {
+    if (!mounted || _isRealtimeSyncInFlight) {
+      return;
+    }
+
+    _isRealtimeSyncInFlight = true;
+    try {
+      if (_isCompanyAccount) {
+        await _loadCompanyDashboard(silent: true);
+        unawaited(
+          _loadMatches().catchError((_) {
+            // Avoid blocking company activity updates if matches refresh fails.
+          }),
+        );
+      } else {
+        await _loadMatches();
+      }
+
+      if (_isCandidateAccount) {
+        await _loadCandidateApplications();
+        if (_shouldLightSyncExploreVacancies()) {
+          await _refreshExploreVacanciesLight();
+        }
+      }
+    } finally {
+      _isRealtimeSyncInFlight = false;
+    }
+  }
+
+  bool _shouldLightSyncExploreVacancies() {
+    if (!_isCandidateAccount || _selectedIndex != 0) {
+      return false;
+    }
+    if (_isLoadingExplore || _exploreError != null) {
+      return false;
+    }
+
+    final DateTime now = DateTime.now();
+    if (_lastExploreSyncAt == null) {
+      return true;
+    }
+    return now.difference(_lastExploreSyncAt!).inSeconds >= 45;
+  }
+
+  Future<void> _refreshExploreVacanciesLight() async {
+    try {
+      final List<VacancyModel> latest = await _vacancyService.getExploreVacancies(
+        jwt: widget.jwt,
+        limit: 20,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      final Map<int, VacancyModel> mergedById = <int, VacancyModel>{
+        for (final VacancyModel item in _exploreVacancies) item.id: item,
+      };
+      for (final VacancyModel item in latest) {
+        mergedById[item.id] = item;
+      }
+
+      _lastExploreSyncAt = DateTime.now();
+      setState(() {
+        _exploreVacancies = mergedById.values.toList(growable: false);
+        if (_exploreVacancies.isNotEmpty) {
+          _showingFallbackVacancies = false;
+        }
+      });
+    } catch (_) {
+      _lastExploreSyncAt = DateTime.now();
+    }
+  }
+
+  bool _shouldAutoRefreshExploreVacancies() {
+    return _isCandidateAccount &&
+        _selectedIndex == 0 &&
+        !_isLoadingExplore &&
+        _exploreError == null &&
+        _exploreVacancies.isEmpty;
+  }
+
+  void _startExploreEmptyAutoRefreshLoop() {
+    _exploreEmptyAutoRefreshTicker?.cancel();
+    _exploreEmptyAutoRefreshTicker = Timer.periodic(
+      const Duration(seconds: 45),
+      (_) {
+        if (!mounted) {
+          return;
+        }
+        if (_shouldAutoRefreshExploreVacancies()) {
+          unawaited(_loadRecommendedVacancies());
+        }
+      },
+    );
   }
 }
 
