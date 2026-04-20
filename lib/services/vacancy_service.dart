@@ -1003,7 +1003,7 @@ class VacancyService {
       return value.toDouble();
     }
     if (value is String) {
-      return double.tryParse(value);
+      return _parseFlexibleDoubleValue(value);
     }
     return null;
   }
@@ -1011,6 +1011,64 @@ class VacancyService {
   bool _isEmptyCollectionResponse(int statusCode) {
     return statusCode == 204 || statusCode == 404;
   }
+}
+
+double? _parseFlexibleDoubleValue(String raw) {
+  final String compact = raw.trim().replaceAll(' ', '');
+  if (compact.isEmpty) {
+    return null;
+  }
+
+  final bool hasComma = compact.contains(',');
+  final bool hasDot = compact.contains('.');
+
+  if (!hasComma && !hasDot) {
+    return double.tryParse(compact);
+  }
+
+  if (hasComma && hasDot) {
+    final int lastComma = compact.lastIndexOf(',');
+    final int lastDot = compact.lastIndexOf('.');
+    final bool commaIsDecimal = lastComma > lastDot;
+    final int separatorIndex = commaIsDecimal ? lastComma : lastDot;
+    final String trailingDigits = compact
+        .substring(separatorIndex + 1)
+        .replaceAll(RegExp(r'[^0-9]'), '');
+
+    if (trailingDigits.length >= 1 && trailingDigits.length <= 2) {
+      final String noThousands = commaIsDecimal
+          ? compact.replaceAll('.', '')
+          : compact.replaceAll(',', '');
+      final String normalized = commaIsDecimal
+          ? noThousands.replaceAll(',', '.')
+          : noThousands;
+      return double.tryParse(normalized);
+    }
+
+    return double.tryParse(compact.replaceAll(RegExp(r'[\.,]'), ''));
+  }
+
+  if (hasComma) {
+    final int lastComma = compact.lastIndexOf(',');
+    final String trailingDigits = compact
+        .substring(lastComma + 1)
+        .replaceAll(RegExp(r'[^0-9]'), '');
+    if (trailingDigits.length >= 1 && trailingDigits.length <= 2) {
+      return double.tryParse(
+        compact.replaceAll('.', '').replaceAll(',', '.'),
+      );
+    }
+    return double.tryParse(compact.replaceAll(',', ''));
+  }
+
+  final int lastDot = compact.lastIndexOf('.');
+  final String trailingDigits = compact
+      .substring(lastDot + 1)
+      .replaceAll(RegExp(r'[^0-9]'), '');
+  if (trailingDigits.length >= 1 && trailingDigits.length <= 2) {
+    return double.tryParse(compact.replaceAll(',', ''));
+  }
+  return double.tryParse(compact.replaceAll('.', ''));
 }
 
 class VacancyFormData {
@@ -1101,7 +1159,7 @@ class VacancyFormData {
 
   static double _toDouble(dynamic value) {
     if (value is num) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? 0;
+    if (value is String) return _parseFlexibleDoubleValue(value) ?? 0;
     return 0;
   }
 }

@@ -2168,13 +2168,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final int lastComma = sanitized.lastIndexOf(',');
     final int decimalSeparatorIndex = lastDot > lastComma ? lastDot : lastComma;
 
+    if (decimalSeparatorIndex == -1) {
+      return _withThousandSeparators(sanitized.replaceAll(RegExp(r'[^0-9]'), ''));
+    }
+
+    final String trailingDigits = sanitized
+        .substring(decimalSeparatorIndex + 1)
+        .replaceAll(RegExp(r'[^0-9]'), '');
+
+    // If there are 3+ digits after the last separator, treat separators as
+    // thousands markers (e.g. 1.000, 1,000, 1.000.000).
+    if (trailingDigits.length > 2) {
+      final String integerDigits = sanitized.replaceAll(RegExp(r'[^0-9]'), '');
+      return _withThousandSeparators(integerDigits);
+    }
+
     String integerPart = sanitized;
     String decimalPart = '';
 
-    if (decimalSeparatorIndex != -1) {
-      integerPart = sanitized.substring(0, decimalSeparatorIndex);
-      decimalPart = sanitized.substring(decimalSeparatorIndex + 1);
-    }
+    integerPart = sanitized.substring(0, decimalSeparatorIndex);
+    decimalPart = sanitized.substring(decimalSeparatorIndex + 1);
 
     integerPart = integerPart.replaceAll(RegExp(r'[^0-9]'), '');
     decimalPart = decimalPart.replaceAll(RegExp(r'[^0-9]'), '');
@@ -2220,8 +2233,43 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (raw.isEmpty) {
       return null;
     }
-    final String normalized = raw.replaceAll(',', '');
-    return double.tryParse(normalized);
+
+    final String compact = raw.replaceAll(' ', '');
+    final bool hasComma = compact.contains(',');
+    final bool hasDot = compact.contains('.');
+
+    if (hasComma && hasDot) {
+      final int lastComma = compact.lastIndexOf(',');
+      final int lastDot = compact.lastIndexOf('.');
+      final bool commaIsDecimal = lastComma > lastDot;
+      final String withoutThousands = commaIsDecimal
+          ? compact.replaceAll('.', '')
+          : compact.replaceAll(',', '');
+      final String normalized = commaIsDecimal
+          ? withoutThousands.replaceAll(',', '.')
+          : withoutThousands;
+      return double.tryParse(normalized);
+    }
+
+    if (hasComma) {
+      // Comma is decimal only when 1-2 digits follow it.
+      final RegExp commaDecimal = RegExp(r',\d{1,2}$');
+      final String normalized = commaDecimal.hasMatch(compact)
+          ? compact.replaceAll('.', '').replaceAll(',', '.')
+          : compact.replaceAll(',', '');
+      return double.tryParse(normalized);
+    }
+
+    if (hasDot) {
+      // Dot is decimal only when 1-2 digits follow it.
+      final RegExp dotDecimal = RegExp(r'\.\d{1,2}$');
+      final String normalized = dotDecimal.hasMatch(compact)
+          ? compact.replaceAll(',', '')
+          : compact.replaceAll('.', '');
+      return double.tryParse(normalized);
+    }
+
+    return double.tryParse(compact);
   }
 
   void _addSkill() {
