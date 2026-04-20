@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
@@ -101,16 +99,7 @@ class _AuthGateState extends State<AuthGate> {
       _isLoading = true;
     });
 
-    final int? userId = AuthService.extractUserIdFromJwt(token);
-    setState(() {
-      _isLoading = false;
-      _isAuthenticated = true;
-      _requiresOnboarding = false;
-      _jwt = token;
-      _userId = userId;
-    });
-
-    unawaited(_resolveProfileStateForUser(token, userId));
+    await _resolveProfileState(token);
   }
 
   Future<void> _resolveProfileState(String token) async {
@@ -180,16 +169,14 @@ class _AuthGateState extends State<AuthGate> {
         return;
       }
 
+      await _resolveProfileStateForUser(authSession.jwt, authSession.userId);
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
-        _isLoading = false;
-        _isAuthenticated = true;
-        _requiresOnboarding = false;
-        _jwt = authSession.jwt;
-        _userId = authSession.userId;
         _roleOverride = authSession.role;
       });
-
-      unawaited(_resolveProfileStateForUser(authSession.jwt, authSession.userId));
     } catch (error) {
       if (!mounted) {
         return;
