@@ -13,10 +13,12 @@ class EmployerVacanciesScreen extends StatefulWidget {
     super.key,
     required this.userProvider,
     required this.jwt,
+    this.refreshTick = 0,
   });
 
   final UserProvider userProvider;
   final String jwt;
+  final int refreshTick;
 
   @override
   State<EmployerVacanciesScreen> createState() =>
@@ -46,6 +48,14 @@ class _EmployerVacanciesScreenState extends State<EmployerVacanciesScreen>
   void initState() {
     super.initState();
     _loadVacancies();
+  }
+
+  @override
+  void didUpdateWidget(covariant EmployerVacanciesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.refreshTick != oldWidget.refreshTick) {
+      unawaited(_loadVacancies());
+    }
   }
 
   @override

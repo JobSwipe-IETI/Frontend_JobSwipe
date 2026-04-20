@@ -10,10 +10,12 @@ class EmployerVacanciesTabScreen extends StatefulWidget {
     super.key,
     required this.userProvider,
     required this.jwt,
+    this.onVacancySaved,
   });
 
   final UserProvider userProvider;
   final String jwt;
+  final VoidCallback? onVacancySaved;
 
   @override
   State<EmployerVacanciesTabScreen> createState() =>
@@ -21,8 +23,11 @@ class EmployerVacanciesTabScreen extends StatefulWidget {
 }
 
 class _EmployerVacanciesTabScreenState extends State<EmployerVacanciesTabScreen>
-    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+    with
+        SingleTickerProviderStateMixin,
+    AutomaticKeepAliveClientMixin {
   late TabController _tabController;
+  int _misVacantesRefreshTick = 0;
 
   @override
   void initState() {
@@ -34,6 +39,15 @@ class _EmployerVacanciesTabScreenState extends State<EmployerVacanciesTabScreen>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _requestMisVacantesRefresh() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _misVacantesRefreshTick++;
+    });
   }
 
   @override
@@ -68,10 +82,19 @@ class _EmployerVacanciesTabScreenState extends State<EmployerVacanciesTabScreen>
               CreateVacancySection(
                 jwt: widget.jwt,
                 userProvider: widget.userProvider,
+                onVacancySaved: () {
+                  if (!mounted) {
+                    return;
+                  }
+                  _tabController.animateTo(1);
+                  _requestMisVacantesRefresh();
+                  widget.onVacancySaved?.call();
+                },
               ),
               EmployerVacanciesScreen(
                 userProvider: widget.userProvider,
                 jwt: widget.jwt,
+                refreshTick: _misVacantesRefreshTick,
               ),
             ],
           ),

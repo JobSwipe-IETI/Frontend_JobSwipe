@@ -482,6 +482,9 @@ class _HomeScreenState extends State<HomeScreen>
           setState(() {
             _exploreVacancies = _exploreVacancies
                 .where((item) => item.id != vacancy.id)
+          onVacancySaved: () {
+            unawaited(_loadCompanyDashboard(silent: true));
+          },
                 .toList(growable: false);
           });
 

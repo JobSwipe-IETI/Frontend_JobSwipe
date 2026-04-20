@@ -14,12 +14,14 @@ class CreateVacancySection extends StatefulWidget {
     this.jwt,
     this.userProvider,
     this.initialVacancyData,
+    this.onVacancySaved,
   });
 
   final int? editingVacancyId;
   final String? jwt;
   final UserProvider? userProvider;
   final VacancyFormData? initialVacancyData;
+  final VoidCallback? onVacancySaved;
 
   @override
   State<CreateVacancySection> createState() => _CreateVacancySectionState();
@@ -913,9 +915,11 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
       );
 
       if (isEditing) {
+        widget.onVacancySaved?.call();
         Navigator.pop(context, true);
       } else {
         _resetForm();
+        widget.onVacancySaved?.call();
       }
     } catch (error) {
       if (!mounted) return;
