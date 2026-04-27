@@ -1,10 +1,14 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
 
 class ProfileApiService {
+  static const Duration _profileRequestTimeout = Duration(seconds: 12);
+  static const Duration _profileStatusTimeout = Duration(seconds: 4);
+
   ProfileApiService({http.Client? client}) : _client = client ?? http.Client();
 
   final http.Client _client;
@@ -15,13 +19,15 @@ class ProfileApiService {
   }) async {
     final Uri uri = Uri.parse('${AppConfig.backendBaseUrl}/profiles/user/$userId');
 
-    final response = await _client.get(
-      uri,
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $jwt',
-      },
-    );
+    final response = await _client
+        .get(
+          uri,
+          headers: <String, String>{
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $jwt',
+          },
+        )
+        .timeout(_profileRequestTimeout);
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
@@ -37,22 +43,23 @@ class ProfileApiService {
   }
 
   Future<bool> hasProfile({required String jwt, required int userId}) async {
-    final Uri uri = Uri.parse('${AppConfig.backendBaseUrl}/profiles/user/$userId');
+    final Uri uri = Uri.parse('${AppConfig.backendBaseUrl}/profiles/user/$userId/status');
 
-    final response = await _client.get(
-      uri,
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $jwt',
-      },
-    );
+    final response = await _client
+        .get(
+          uri,
+          headers: <String, String>{
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $jwt',
+          },
+        )
+        .timeout(_profileStatusTimeout);
 
     if (response.statusCode == 200) {
-      return true;
-    }
-
-    if (response.statusCode == 404) {
-      return false;
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        return decoded['hasProfile'] == true;
+      }
     }
 
     throw ProfileApiException(

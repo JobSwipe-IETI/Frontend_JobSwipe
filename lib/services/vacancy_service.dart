@@ -372,14 +372,19 @@ class VacancyService {
           .toList(growable: false);
     }
 
-    if (_isEmptyCollectionResponse(response.statusCode) ||
-        response.statusCode == 500) {
+    if (_isEmptyCollectionResponse(response.statusCode)) {
       return const <VacancyModel>[];
     }
 
     if (response.statusCode == 401) {
       throw const VacancyException(
         'Tu sesión expiró. Inicia sesión nuevamente.',
+      );
+    }
+
+    if (response.statusCode == 500) {
+      throw const VacancyException(
+        'El backend devolvió un error interno al cargar tus vacantes. Cierra sesión e inicia de nuevo; si persiste, revisamos logs del backend.',
       );
     }
 

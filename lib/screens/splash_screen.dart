@@ -23,7 +23,7 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
     _setupAnimations();
-    Future.delayed(const Duration(seconds: 3), () {
+    Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) {
         widget.onSplashComplete();
       }

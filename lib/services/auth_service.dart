@@ -25,15 +25,18 @@ class AuthService {
   final http.Client _client;
 
   Future<AuthSession?> signInWithGoogleAndExchangeJwt() async {
+    final Stopwatch stopwatch = Stopwatch()..start();
     try {
       final GoogleSignInAccount? account = await _googleSignIn.signIn();
       debugPrint('Google Sign-In result: $account');
       if (account == null) {
+        debugPrint('⏱️ Login cancelled after ${stopwatch.elapsedMilliseconds} ms');
         return null;
       }
 
       final GoogleSignInAuthentication googleAuth =
           await account.authentication;
+        debugPrint('⏱️ Google auth token retrieval: ${stopwatch.elapsedMilliseconds} ms');
       final String? idToken = googleAuth.idToken;
       final String? accessToken = googleAuth.accessToken;
 
@@ -51,7 +54,8 @@ class AuthService {
               'accessToken': accessToken,
             }),
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 8));
+          debugPrint('⏱️ Backend auth exchange completed: ${stopwatch.elapsedMilliseconds} ms');
 
       if (response.statusCode != 200) {
         throw AuthException(
@@ -63,6 +67,9 @@ class AuthService {
           jsonDecode(response.body) as Map<String, dynamic>;
       final Object? token = json['accessToken'];
       final Object? user = json['user'];
+        final bool? hasProfile = json['hasProfile'] is bool
+          ? json['hasProfile'] as bool
+          : null;
 
       if (token is! String || token.isEmpty) {
         throw const AuthException('El backend no devolvió un JWT válido.');
@@ -79,6 +86,7 @@ class AuthService {
         name: user is Map<String, dynamic> ? user['name']?.toString() : null,
         email: user is Map<String, dynamic> ? user['email']?.toString() : null,
         avatarUrl: user is Map<String, dynamic> ? user['avatarUrl']?.toString() : null,
+        hasProfile: hasProfile,
       );
     } on PlatformException catch (error) {
       debugPrint('Google Sign-In error: $error');
@@ -91,6 +99,9 @@ class AuthService {
       );
     } on http.ClientException catch (error) {
       throw AuthException('Error de red: ${error.message}');
+    } finally {
+      stopwatch.stop();
+      debugPrint('⏱️ signInWithGoogleAndExchangeJwt total: ${stopwatch.elapsedMilliseconds} ms');
     }
   }
 
@@ -199,6 +210,7 @@ class AuthSession {
     this.name,
     this.email,
     this.avatarUrl,
+    this.hasProfile,
   });
 
   final String jwt;
@@ -207,6 +219,7 @@ class AuthSession {
   final String? name;
   final String? email;
   final String? avatarUrl;
+  final bool? hasProfile;
 }
 
 class AuthException implements Exception {

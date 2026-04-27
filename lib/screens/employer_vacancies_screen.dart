@@ -31,6 +31,7 @@ class _EmployerVacanciesScreenState extends State<EmployerVacanciesScreen>
 
   List<VacancyModel> _vacancies = const [];
   bool _isLoading = true;
+  final Set<int> _deletingVacancyIds = <int>{};
   String? _error;
   int _loadingStep = 0;
   Timer? _loadingTicker;
@@ -254,6 +255,14 @@ class _EmployerVacanciesScreenState extends State<EmployerVacanciesScreen>
 
     if (confirmed != true) return;
 
+    if (_deletingVacancyIds.contains(vacancy.id)) {
+      return;
+    }
+
+    setState(() {
+      _deletingVacancyIds.add(vacancy.id);
+    });
+
     try {
       await _vacancyService.deleteVacancy(
         jwt: widget.jwt,
@@ -271,6 +280,12 @@ class _EmployerVacanciesScreenState extends State<EmployerVacanciesScreen>
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _deletingVacancyIds.remove(vacancy.id);
+        });
       }
     }
   }
@@ -447,6 +462,7 @@ class _EmployerVacanciesScreenState extends State<EmployerVacanciesScreen>
   }
 
   Widget _buildVacancyCard(BuildContext context, VacancyModel vacancy) {
+    final bool isDeleting = _deletingVacancyIds.contains(vacancy.id);
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -535,9 +551,15 @@ class _EmployerVacanciesScreenState extends State<EmployerVacanciesScreen>
                 const SizedBox(width: 12),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () => _deleteVacancy(vacancy),
-                    icon: const Icon(Icons.delete_outline),
-                    label: const Text('Eliminar'),
+                    onPressed: isDeleting ? null : () => _deleteVacancy(vacancy),
+                    icon: isDeleting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.delete_outline),
+                    label: Text(isDeleting ? 'Eliminando...' : 'Eliminar'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: JobSwipeTheme.errorRed,
                       side: const BorderSide(color: JobSwipeTheme.errorRed),
