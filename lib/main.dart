@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config/theme.dart';
+import 'config/app_config.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
@@ -10,7 +12,20 @@ import 'services/auth_service.dart';
 import 'services/profile_api_service.dart';
 import 'services/secure_token_storage.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  if (AppConfig.isSupabaseChatConfigured) {
+    try {
+      await Supabase.initialize(
+        url: AppConfig.supabaseUrl,
+        anonKey: AppConfig.supabaseAnonKey,
+      );
+    } catch (error) {
+      debugPrint('Supabase init skipped: $error');
+    }
+  }
+
   runApp(const JobSwipeApp());
 }
 
@@ -81,6 +96,7 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _restoreSession() async {
+    final Stopwatch stopwatch = Stopwatch()..start();
     final String? token = await _tokenStorage.readToken();
     if (!mounted) {
       return;
@@ -100,6 +116,8 @@ class _AuthGateState extends State<AuthGate> {
     });
 
     await _resolveProfileState(token);
+    stopwatch.stop();
+    debugPrint('⏱️ _restoreSession total: ${stopwatch.elapsedMilliseconds} ms');
   }
 
   Future<void> _resolveProfileState(String token) async {
@@ -107,21 +125,25 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _resolveProfileStateForUser(String token, int? userId) async {
+    final Stopwatch stopwatch = Stopwatch()..start();
     bool requiresOnboarding = true;
+    Map<String, dynamic>? profileSeed;
 
     debugPrint('🔍 _resolveProfileStateForUser: userId=$userId');
 
     if (userId != null) {
       try {
-        final hasProfile = await _profileApiService.hasProfile(
+        final bool hasProfile = await _profileApiService.hasProfile(
           jwt: token,
           userId: userId,
         );
         debugPrint('✅ hasProfile check: $hasProfile for userId=$userId');
         requiresOnboarding = !hasProfile;
+        profileSeed = null;
       } catch (e) {
         debugPrint('❌ hasProfile error: $e');
         requiresOnboarding = true;
+        profileSeed = null;
       }
     } else {
       debugPrint('❌ userId is null!');
@@ -133,10 +155,15 @@ class _AuthGateState extends State<AuthGate> {
       _requiresOnboarding = requiresOnboarding;
       _jwt = token;
       _userId = userId;
+      _profileSeed = profileSeed;
     });
+
+    stopwatch.stop();
+    debugPrint('⏱️ _resolveProfileStateForUser total: ${stopwatch.elapsedMilliseconds} ms');
   }
 
   Future<void> _signIn() async {
+    final Stopwatch stopwatch = Stopwatch()..start();
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -159,6 +186,7 @@ class _AuthGateState extends State<AuthGate> {
       }
 
       await _tokenStorage.saveToken(authSession.jwt);
+      debugPrint('⏱️ Token persisted at ${stopwatch.elapsedMilliseconds} ms');
 
       debugPrint('✅ Login successful: userId=${authSession.userId}, role=${authSession.role}');
       if (kDebugMode) {
@@ -169,14 +197,28 @@ class _AuthGateState extends State<AuthGate> {
         return;
       }
 
-      await _resolveProfileStateForUser(authSession.jwt, authSession.userId);
-      if (!mounted) {
-        return;
-      }
+      if (authSession.hasProfile != null) {
+        setState(() {
+          _isLoading = false;
+          _isAuthenticated = true;
+          _requiresOnboarding = !authSession.hasProfile!;
+          _jwt = authSession.jwt;
+          _userId = authSession.userId;
+          _roleOverride = authSession.role;
+          _profileSeed = null;
+        });
+        debugPrint('⏱️ Fast login path resolved in ${stopwatch.elapsedMilliseconds} ms');
+      } else {
+        await _resolveProfileStateForUser(authSession.jwt, authSession.userId);
+        if (!mounted) {
+          return;
+        }
 
-      setState(() {
-        _roleOverride = authSession.role;
-      });
+        setState(() {
+          _roleOverride = authSession.role;
+        });
+        debugPrint('⏱️ Fallback login path resolved in ${stopwatch.elapsedMilliseconds} ms');
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -186,6 +228,9 @@ class _AuthGateState extends State<AuthGate> {
         _isLoading = false;
         _errorMessage = error.toString();
       });
+    } finally {
+      stopwatch.stop();
+      debugPrint('⏱️ _signIn total: ${stopwatch.elapsedMilliseconds} ms');
     }
   }
 

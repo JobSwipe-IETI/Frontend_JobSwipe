@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "21565703018",
+    "project_id": "ieti-24b28",
+    "storage_bucket": "ieti-24b28.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:21565703018:android:7087cff175930806b15b13",
+        "android_client_info": {
+          "package_name": "com.example.jobswipe"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBx2_5-jcLUHCa2k1ULhYPa_bTXs_3ybAw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
