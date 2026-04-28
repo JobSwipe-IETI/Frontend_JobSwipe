@@ -25,68 +25,14 @@ class AuthService {
   final http.Client _client;
 
   Future<AuthSession?> signInWithGoogleAndExchangeJwt() async {
-    final Stopwatch stopwatch = Stopwatch()..start();
     try {
-      final GoogleSignInAccount? account = await _googleSignIn.signIn();
-      debugPrint('Google Sign-In result: $account');
-      if (account == null) {
-        debugPrint('⏱️ Login cancelled after ${stopwatch.elapsedMilliseconds} ms');
-        return null;
-      }
-
-      final GoogleSignInAuthentication googleAuth =
-          await account.authentication;
-        debugPrint('⏱️ Google auth token retrieval: ${stopwatch.elapsedMilliseconds} ms');
-      final String? idToken = googleAuth.idToken;
-      final String? accessToken = googleAuth.accessToken;
-
-      if (idToken == null || idToken.isEmpty) {
-        throw const AuthException('Google no devolvió idToken.');
-      }
-
-      final Uri uri = Uri.parse('${AppConfig.backendBaseUrl}/api/auth/google');
-      final http.Response response = await _client
-          .post(
-            uri,
-            headers: const <String, String>{'Content-Type': 'application/json'},
-            body: jsonEncode(<String, String?>{
-              'idToken': idToken,
-              'accessToken': accessToken,
-            }),
-          )
-          .timeout(const Duration(seconds: 8));
-          debugPrint('⏱️ Backend auth exchange completed: ${stopwatch.elapsedMilliseconds} ms');
-
-      if (response.statusCode != 200) {
-        throw AuthException(
-          'Backend rechazó autenticación (${response.statusCode}): ${response.body}',
-        );
-      }
-
-      final Map<String, dynamic> json =
-          jsonDecode(response.body) as Map<String, dynamic>;
-      final Object? token = json['accessToken'];
-      final Object? user = json['user'];
-        final bool? hasProfile = json['hasProfile'] is bool
-          ? json['hasProfile'] as bool
-          : null;
-
-      if (token is! String || token.isEmpty) {
-        throw const AuthException('El backend no devolvió un JWT válido.');
-      }
-
-      final int? userId = user is Map<String, dynamic>
-          ? (user['id'] as num?)?.toInt()
-          : null;
-
-      return AuthSession(
-        jwt: token,
-        userId: userId,
-        role: user is Map<String, dynamic> ? user['role']?.toString() : null,
-        name: user is Map<String, dynamic> ? user['name']?.toString() : null,
-        email: user is Map<String, dynamic> ? user['email']?.toString() : null,
-        avatarUrl: user is Map<String, dynamic> ? user['avatarUrl']?.toString() : null,
-        hasProfile: hasProfile,
+      return await _signInAndExchangeJwt(
+        accountProvider: _googleSignIn.signIn,
+        endpointPath: '/api/auth/google',
+        requestBody: (idToken, accessToken) => <String, String?>{
+          'idToken': idToken,
+          'accessToken': accessToken,
+        },
       );
     } on PlatformException catch (error) {
       debugPrint('Google Sign-In error: $error');
@@ -99,10 +45,101 @@ class AuthService {
       );
     } on http.ClientException catch (error) {
       throw AuthException('Error de red: ${error.message}');
-    } finally {
-      stopwatch.stop();
-      debugPrint('⏱️ signInWithGoogleAndExchangeJwt total: ${stopwatch.elapsedMilliseconds} ms');
     }
+  }
+
+  Future<AuthSession?> signInSilentlyAndExchangeJwt() async {
+    return await _signInAndExchangeJwt(
+      accountProvider: () => _googleSignIn.signInSilently(suppressErrors: true),
+      endpointPath: '/api/auth/google',
+      requestBody: (idToken, accessToken) => <String, String?>{
+        'idToken': idToken,
+        'accessToken': accessToken,
+      },
+    );
+  }
+
+  Future<AuthSession?> refreshSession({required String refreshToken}) async {
+    final http.Response response = await _client
+        .post(
+          Uri.parse('${AppConfig.backendBaseUrl}/api/auth/refresh'),
+          headers: const <String, String>{'Content-Type': 'application/json'},
+          body: jsonEncode(<String, String>{'refreshToken': refreshToken}),
+        )
+        .timeout(const Duration(seconds: 8));
+
+    if (response.statusCode != 200) {
+      throw AuthException(
+        'Backend rechazó refresh (${response.statusCode}): ${response.body}',
+      );
+    }
+
+    return _parseAuthSession(response.body);
+  }
+
+  Future<AuthSession?> _signInAndExchangeJwt({
+    required Future<GoogleSignInAccount?> Function() accountProvider,
+    required String endpointPath,
+    required Map<String, String?> Function(String idToken, String? accessToken)
+        requestBody,
+  }) async {
+    final GoogleSignInAccount? account = await accountProvider();
+    debugPrint('Google Sign-In result: $account');
+    if (account == null) {
+      return null;
+    }
+
+    final GoogleSignInAuthentication googleAuth = await account.authentication;
+    final String? idToken = googleAuth.idToken;
+    final String? accessToken = googleAuth.accessToken;
+
+    if (idToken == null || idToken.isEmpty) {
+      throw const AuthException('Google no devolvió idToken.');
+    }
+
+    final Uri uri = Uri.parse('${AppConfig.backendBaseUrl}$endpointPath');
+    final http.Response response = await _client
+        .post(
+          uri,
+          headers: const <String, String>{'Content-Type': 'application/json'},
+          body: jsonEncode(requestBody(idToken, accessToken)),
+        )
+        .timeout(const Duration(seconds: 8));
+
+    debugPrint('⏱️ Backend auth exchange completed: ${response.statusCode}');
+
+    if (response.statusCode != 200) {
+      throw AuthException(
+        'Backend rechazó autenticación (${response.statusCode}): ${response.body}',
+      );
+    }
+
+    return _parseAuthSession(response.body);
+  }
+
+  AuthSession _parseAuthSession(String responseBody) {
+    final Map<String, dynamic> json = jsonDecode(responseBody) as Map<String, dynamic>;
+    final Object? accessToken = json['accessToken'];
+    final Object? refreshToken = json['refreshToken'];
+    final Object? user = json['user'];
+    final bool? hasProfile = json['hasProfile'] is bool ? json['hasProfile'] as bool : null;
+
+    if (accessToken is! String || accessToken.isEmpty) {
+      throw const AuthException('El backend no devolvió un access token válido.');
+    }
+
+    final int? userId = user is Map<String, dynamic> ? (user['id'] as num?)?.toInt() : null;
+
+    return AuthSession(
+      accessToken: accessToken,
+      refreshToken: refreshToken is String && refreshToken.isNotEmpty ? refreshToken : null,
+      userId: userId,
+      role: user is Map<String, dynamic> ? user['role']?.toString() : null,
+      name: user is Map<String, dynamic> ? user['name']?.toString() : null,
+      email: user is Map<String, dynamic> ? user['email']?.toString() : null,
+      avatarUrl: user is Map<String, dynamic> ? user['avatarUrl']?.toString() : null,
+      hasProfile: hasProfile,
+    );
   }
 
   /// Decodifica el JWT y extrae el rol del usuario
@@ -204,7 +241,8 @@ class AuthService {
 
 class AuthSession {
   const AuthSession({
-    required this.jwt,
+    required this.accessToken,
+    this.refreshToken,
     this.userId,
     this.role,
     this.name,
@@ -213,7 +251,8 @@ class AuthSession {
     this.hasProfile,
   });
 
-  final String jwt;
+  final String accessToken;
+  final String? refreshToken;
   final int? userId;
   final String? role;
   final String? name;

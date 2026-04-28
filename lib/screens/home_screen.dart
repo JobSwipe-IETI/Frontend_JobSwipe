@@ -42,7 +42,7 @@ class _HomeScreenState extends State<HomeScreen>
   with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const int _connectionsNavIndex = 1;
   static const int _exploreNavIndex = 0;
-  static const Duration _realtimeSyncInterval = Duration(seconds: 6);
+  static const Duration _realtimeSyncInterval = Duration(seconds: 3);
   static const Duration _companyDashboardRefreshWindow = Duration(seconds: 12);
   static const Duration _connectionsRefreshWindow = Duration(seconds: 6);
   int _selectedIndex = 0;
@@ -65,6 +65,7 @@ class _HomeScreenState extends State<HomeScreen>
   List<ConversationSummary> _conversations = const [];
   List<CandidateApplicationItem> _candidateApplications = const [];
   final Set<String> _knownMatchKeys = <String>{};
+  final Set<String> _pendingOptimisticMatchKeys = <String>{};
   final Set<String> _openingChatMatchKeys = <String>{};
   final Set<String> _knownCompanyLikeKeys = <String>{};
   final Set<String> _knownCandidateDecisionKeys = <String>{};
@@ -540,14 +541,18 @@ class _HomeScreenState extends State<HomeScreen>
         if (!_isCompanyAccount) {
           return;
         }
+        final bool alreadyMatched = payload['matched'] == true;
         unawaited(_loadCompanyDashboard(silent: true, forceRefresh: true));
         unawaited(_loadMatches(forceRefresh: true));
-        if (!isOwnAction && _selectedIndex != _exploreNavIndex) {
+        if (alreadyMatched) {
+          _schedulePostEventSync();
+        }
+        if (!alreadyMatched && !isOwnAction && _selectedIndex != _exploreNavIndex) {
           setState(() {
             _activityBadgeCount += 1;
           });
         }
-        if (isOwnAction) {
+        if (isOwnAction || alreadyMatched) {
           return;
         }
         final String candidateName =
@@ -565,17 +570,27 @@ class _HomeScreenState extends State<HomeScreen>
         if (!_isCandidateAccount) {
           return;
         }
+        final bool matched = payload['matched'] == true;
         unawaited(_loadCandidateApplications(forceRefresh: true));
         unawaited(_loadMatches(forceRefresh: true));
+        if (matched) {
+          _schedulePostEventSync();
+        }
         if (!isOwnAction && _selectedIndex != _notificationBadgeNavIndex) {
           setState(() {
             _matchesBadgeCount += 1;
+            // Also add a short-lived unread signal key so the header badge
+            // (which shows _unreadCandidateMatchKeys.length) updates
+            // for company decisions (likes/rejections).
+            final int? vacancyId = _toNullableInt(payload['vacancyId']);
+            final int? companyId = _toNullableInt(payload['companyId']);
+            final String key = 'decision:${vacancyId ?? 0}:${companyId ?? 0}';
+            _unreadCandidateMatchKeys.add(key);
           });
         }
         if (isOwnAction) {
           return;
         }
-        final bool matched = payload['matched'] == true;
         final String companyName = payload['companyName']?.toString() ?? 'la empresa';
         if (matched) {
           _showFloatingNotification(
@@ -602,6 +617,7 @@ class _HomeScreenState extends State<HomeScreen>
         } else if (_isCandidateAccount) {
           unawaited(_loadCandidateApplications(forceRefresh: true));
         }
+        _schedulePostEventSync();
         if (!isOwnAction && _selectedIndex != _notificationBadgeNavIndex) {
           setState(() {
             _matchesBadgeCount += 1;
@@ -622,6 +638,20 @@ class _HomeScreenState extends State<HomeScreen>
       default:
         return;
     }
+  }
+
+  void _schedulePostEventSync() {
+    Future<void>.delayed(const Duration(milliseconds: 900), () {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_loadMatches(forceRefresh: true));
+      if (_isCompanyAccount) {
+        unawaited(_loadCompanyDashboard(silent: true, forceRefresh: true));
+      } else if (_isCandidateAccount) {
+        unawaited(_loadCandidateApplications(forceRefresh: true));
+      }
+    });
   }
 
   @override
@@ -1781,6 +1811,18 @@ class _HomeScreenState extends State<HomeScreen>
                         _applicantsCache[item.vacancyId] = cachedApplicants!;
                         _decrementCompanyPipelineApplicantCount(item.vacancyId);
 
+                        _showFloatingNotification(
+                          decision == SwipeDecision.like
+                            ? 'Like enviado. En un momento se generara la conexion.'
+                            : 'Abriendo formulario de rechazo...',
+                          icon: decision == SwipeDecision.like
+                            ? Icons.favorite_rounded
+                            : Icons.hourglass_top_rounded,
+                          accentColor: decision == SwipeDecision.like
+                            ? JobSwipeTheme.successGreen
+                            : const Color(0xFF64748B),
+                        );
+
                         final CompanyCandidateDecisionResult? decisionResult = await _handleCompanyCandidateDecision(
                           vacancyId: item.vacancyId,
                           applicant: applicant,
@@ -1814,6 +1856,25 @@ class _HomeScreenState extends State<HomeScreen>
                           );
                         });
 
+                        unawaited(
+                          _loadCompanyDashboard(silent: true, forceRefresh: true)
+                              .catchError((_) {}),
+                        );
+                        unawaited(
+                          _loadApplicantsForVacancy(
+                            item.vacancyId,
+                            forceRefresh: true,
+                          ).then((freshApplicants) {
+                            if (!mounted) {
+                              return;
+                            }
+                            setModalState(() {
+                              cachedApplicants = freshApplicants;
+                            });
+                            _applicantsCache[item.vacancyId] = freshApplicants;
+                          }).catchError((_) {}),
+                        );
+
                         if (matched) {
                           _pushImmediateMatchSignal(
                             vacancyId: item.vacancyId,
@@ -1823,11 +1884,11 @@ class _HomeScreenState extends State<HomeScreen>
                         }
 
                         _showFloatingNotification(
-                          matched
-                            ? 'Candidato aprobado. Nueva conexion lista en Conexiones. 💜'
-                            : decision == SwipeDecision.like
-                              ? 'Candidato aprobado correctamente. ✅'
-                              : 'Dislike guardado para ${applicant.candidateName}.',
+                          decision == SwipeDecision.like
+                              ? matched
+                                  ? 'Like enviado. Conexion creada, aparecera en Conexiones en un momento.'
+                                  : 'Like enviado. En un momento se generara la conexion si es mutuo.'
+                              : 'Rechazo enviado. En un momento se le notificara al usuario.',
                           icon: matched
                             ? Icons.favorite_rounded
                             : decision == SwipeDecision.like
@@ -1902,6 +1963,18 @@ class _HomeScreenState extends State<HomeScreen>
                             _applicantsCache[item.vacancyId] = cachedApplicants!;
                             _decrementCompanyPipelineApplicantCount(item.vacancyId);
 
+                            _showFloatingNotification(
+                              decision == SwipeDecision.like
+                                ? 'Like enviado. En un momento se generara la conexion.'
+                                : 'Abriendo formulario de rechazo...',
+                              icon: decision == SwipeDecision.like
+                                ? Icons.favorite_rounded
+                                : Icons.hourglass_top_rounded,
+                              accentColor: decision == SwipeDecision.like
+                                ? JobSwipeTheme.successGreen
+                                : const Color(0xFF64748B),
+                            );
+
                             final CompanyCandidateDecisionResult? decisionResult = await _handleCompanyCandidateDecision(
                               vacancyId: item.vacancyId,
                               applicant: applicant,
@@ -1936,6 +2009,26 @@ class _HomeScreenState extends State<HomeScreen>
                               );
                             });
 
+                            unawaited(
+                              _loadCompanyDashboard(silent: true, forceRefresh: true)
+                                  .catchError((_) {}),
+                            );
+                            unawaited(
+                              _loadApplicantsForVacancy(
+                                item.vacancyId,
+                                forceRefresh: true,
+                              ).then((freshApplicants) {
+                                if (!mounted) {
+                                  return;
+                                }
+                                setModalState(() {
+                                  cachedApplicants = freshApplicants;
+                                  applicantsFuture = Future.value(freshApplicants);
+                                });
+                                _applicantsCache[item.vacancyId] = freshApplicants;
+                              }).catchError((_) {}),
+                            );
+
                             if (matched) {
                               _pushImmediateMatchSignal(
                                 vacancyId: item.vacancyId,
@@ -1945,11 +2038,11 @@ class _HomeScreenState extends State<HomeScreen>
                             }
 
                             _showFloatingNotification(
-                              matched
-                                  ? 'Candidato aprobado. Nueva conexion lista en Conexiones. 💜'
-                                  : decision == SwipeDecision.like
-                                      ? 'Candidato aprobado correctamente. ✅'
-                                      : 'Dislike guardado para ${applicant.candidateName}.',
+                              decision == SwipeDecision.like
+                                ? matched
+                                  ? 'Like enviado. Conexion creada, aparecera en Conexiones en un momento.'
+                                  : 'Like enviado. En un momento se generara la conexion si es mutuo.'
+                                : 'Rechazo enviado. En un momento se le notificara al usuario.',
                               icon: matched
                                   ? Icons.favorite_rounded
                                   : decision == SwipeDecision.like
@@ -2429,9 +2522,31 @@ class _HomeScreenState extends State<HomeScreen>
       final Set<String> incomingKeys = matches
           .map((item) => item.stableKey)
           .toSet();
+
+      // Keep optimistic matches visible until backend confirms them.
+      final List<UserMatchItem> pendingOptimistic = _matches
+          .where(
+            (item) =>
+                _pendingOptimisticMatchKeys.contains(item.stableKey) &&
+                !incomingKeys.contains(item.stableKey),
+          )
+          .toList(growable: false);
+
+      final Set<String> confirmedOptimisticKeys = incomingKeys
+          .where((key) => _pendingOptimisticMatchKeys.contains(key))
+          .toSet();
+
+      final List<UserMatchItem> mergedMatches = pendingOptimistic.isEmpty
+          ? matches
+          : <UserMatchItem>[...pendingOptimistic, ...matches];
+
+      final Set<String> mergedKeys = mergedMatches
+          .map((item) => item.stableKey)
+          .toSet();
+
       int newCount = 0;
       if (!initialLoad) {
-        for (final String key in incomingKeys) {
+        for (final String key in mergedKeys) {
           if (!_knownMatchKeys.contains(key)) {
             newCount++;
             if (_isCandidateAccount) {
@@ -2446,10 +2561,11 @@ class _HomeScreenState extends State<HomeScreen>
       }
 
       setState(() {
-        _matches = matches;
+        _matches = mergedMatches;
         _knownMatchKeys
           ..clear()
-          ..addAll(incomingKeys);
+          ..addAll(mergedKeys);
+        _pendingOptimisticMatchKeys.removeAll(confirmedOptimisticKeys);
         _lastMatchesSyncAt = DateTime.now();
         _hasLoadedMatches = true;
         if (initialLoad || _selectedIndex == _notificationBadgeNavIndex) {
@@ -2733,6 +2849,7 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       CompanyDecisionPayload? payload;
       if (decision == SwipeDecision.dislike) {
+        await Future<void>.delayed(const Duration(milliseconds: 220));
         final VacancyFormData vacancyForm = await _getVacancyFormForDecision(
           vacancyId,
         );
@@ -2759,7 +2876,7 @@ class _HomeScreenState extends State<HomeScreen>
       }
 
       unawaited(
-        _loadMatches().catchError((_) {
+        _loadMatches(forceRefresh: true).catchError((_) {
           // Ignore transient sync errors after a successful decision save.
         }),
       );
@@ -3048,6 +3165,7 @@ class _HomeScreenState extends State<HomeScreen>
     setState(() {
       _matches = <UserMatchItem>[optimistic, ..._matches];
       _knownMatchKeys.add(optimistic.stableKey);
+      _pendingOptimisticMatchKeys.add(optimistic.stableKey);
       if (_selectedIndex != 1) {
         _matchesBadgeCount += 1;
       }
@@ -3222,17 +3340,27 @@ class _HomeScreenState extends State<HomeScreen>
               right: 8,
               top: 6,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
                 decoration: BoxDecoration(
                   color: JobSwipeTheme.errorRed,
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.12),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                  border: Border.all(color: Colors.white, width: 1.5),
                 ),
+                alignment: Alignment.center,
                 child: Text(
                   signalCount > 9 ? '9+' : '$signalCount',
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
@@ -3933,14 +4061,25 @@ class _HomeScreenState extends State<HomeScreen>
         ? '${match.compatibilityPercentage!.toStringAsFixed(0)}%'
         : (match.compatibilityLevel ?? 'Match');
 
+    final bool hasSignal = _matchHasUnreadSignal(match);
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        color: hasSignal ? const Color(0xFFFBF7FF) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: hasSignal ? const Color(0xFFD6BBFF) : const Color(0xFFE2E8F0)),
+        boxShadow: hasSignal
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF7C3AED).withOpacity(0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -3960,23 +4099,55 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  'Conexion',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF10B981),
+              Stack(
+                alignment: Alignment.topRight,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'Conexion',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF10B981),
+                      ),
+                    ),
                   ),
-                ),
+                  if (hasSignal)
+                    Positioned(
+                      right: -8,
+                      top: -8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF7C3AED),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.12),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: const Text(
+                          'Nuevo',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ],
           ),
@@ -4123,6 +4294,21 @@ class _HomeScreenState extends State<HomeScreen>
       }
     }
     return null;
+  }
+
+  bool _matchHasUnreadSignal(UserMatchItem match) {
+    // Primary signals use stableKey; company decisions insert keys with
+    // the pattern 'decision:<vacancyId>:<companyId>'. Consider both.
+    if (_unreadCandidateMatchKeys.contains(match.stableKey)) {
+      return true;
+    }
+    final String decisionPrefix = 'decision:${match.vacancyId}:';
+    for (final String key in _unreadCandidateMatchKeys) {
+      if (key.startsWith(decisionPrefix)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   Future<void> _handleOpenChat(UserMatchItem match) async {

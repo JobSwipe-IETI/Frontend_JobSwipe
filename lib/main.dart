@@ -80,6 +80,7 @@ class _AuthGateState extends State<AuthGate> {
   final ProfileApiService _profileApiService = ProfileApiService();
   final SecureTokenStorage _tokenStorage = SecureTokenStorage();
 
+  bool _isBootstrapping = true;
   bool _isLoading = false;
   bool _isAuthenticated = false;
   bool _requiresOnboarding = false;
@@ -97,27 +98,157 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<void> _restoreSession() async {
     final Stopwatch stopwatch = Stopwatch()..start();
-    final String? token = await _tokenStorage.readToken();
-    if (!mounted) {
-      return;
-    }
+    try {
+      final String? token = await _tokenStorage.readAccessToken();
+      if (!mounted) {
+        return;
+      }
 
-    if (token == null || token.isEmpty) {
+      if (token != null && token.isNotEmpty) {
+        setState(() {
+          _isLoading = true;
+        });
+
+        final bool restoredFromStorage = await _tryRestoreSessionWithToken(token);
+        if (restoredFromStorage) {
+          return;
+        }
+      }
+
+      final String? refreshToken = await _tokenStorage.readRefreshToken();
+      if (refreshToken != null && refreshToken.isNotEmpty) {
+        final bool refreshed = await _tryRefreshSession(refreshToken);
+        if (refreshed) {
+          return;
+        }
+      }
+
+      final bool restoredSilently = await _tryRestoreSessionSilently();
+      if (restoredSilently) {
+        return;
+      }
+
       setState(() {
+        _isLoading = false;
         _isAuthenticated = false;
         _requiresOnboarding = false;
         _jwt = null;
+        _userId = null;
+        _roleOverride = null;
+        _profileSeed = null;
+        _errorMessage = null;
       });
-      return;
+    } finally {
+      stopwatch.stop();
+      if (mounted) {
+        setState(() {
+          _isBootstrapping = false;
+        });
+      }
+      debugPrint('⏱️ _restoreSession total: ${stopwatch.elapsedMilliseconds} ms');
     }
+  }
 
-    setState(() {
-      _isLoading = true;
-    });
+  Future<bool> _tryRestoreSessionWithToken(String token) async {
+    try {
+      await _resolveProfileState(token);
+      return true;
+    } catch (error) {
+      debugPrint('❌ Restore with stored token failed: $error');
+      return false;
+    }
+  }
 
-    await _resolveProfileState(token);
-    stopwatch.stop();
-    debugPrint('⏱️ _restoreSession total: ${stopwatch.elapsedMilliseconds} ms');
+  Future<bool> _tryRefreshSession(String refreshToken) async {
+    try {
+      final authSession = await _authService.refreshSession(refreshToken: refreshToken);
+      if (authSession == null || authSession.accessToken.isEmpty) {
+        return false;
+      }
+
+      await _tokenStorage.saveSession(
+        accessToken: authSession.accessToken,
+        refreshToken: authSession.refreshToken,
+      );
+
+      if (!mounted) {
+        return true;
+      }
+
+      if (authSession.hasProfile != null) {
+        setState(() {
+          _isLoading = false;
+          _isAuthenticated = true;
+          _requiresOnboarding = !authSession.hasProfile!;
+          _jwt = authSession.accessToken;
+          _userId = authSession.userId;
+          _roleOverride = authSession.role;
+          _profileSeed = null;
+          _errorMessage = null;
+        });
+        return true;
+      }
+
+      await _resolveProfileStateForUser(authSession.accessToken, authSession.userId);
+      if (!mounted) {
+        return true;
+      }
+
+      setState(() {
+        _roleOverride = authSession.role;
+        _errorMessage = null;
+      });
+      return true;
+    } catch (error) {
+      debugPrint('❌ Refresh session failed: $error');
+      return false;
+    }
+  }
+
+  Future<bool> _tryRestoreSessionSilently() async {
+    try {
+      final authSession = await _authService.signInSilentlyAndExchangeJwt();
+      if (authSession == null || authSession.accessToken.isEmpty) {
+        return false;
+      }
+
+      await _tokenStorage.saveSession(
+        accessToken: authSession.accessToken,
+        refreshToken: authSession.refreshToken,
+      );
+
+      if (!mounted) {
+        return true;
+      }
+
+      if (authSession.hasProfile != null) {
+        setState(() {
+          _isLoading = false;
+          _isAuthenticated = true;
+          _requiresOnboarding = !authSession.hasProfile!;
+          _jwt = authSession.accessToken;
+          _userId = authSession.userId;
+          _roleOverride = authSession.role;
+          _profileSeed = null;
+          _errorMessage = null;
+        });
+        return true;
+      }
+
+      await _resolveProfileStateForUser(authSession.accessToken, authSession.userId);
+      if (!mounted) {
+        return true;
+      }
+
+      setState(() {
+        _roleOverride = authSession.role;
+        _errorMessage = null;
+      });
+      return true;
+    } catch (error) {
+      debugPrint('❌ Silent session restore failed: $error');
+      return false;
+    }
   }
 
   Future<void> _resolveProfileState(String token) async {
@@ -185,12 +316,15 @@ class _AuthGateState extends State<AuthGate> {
         return;
       }
 
-      await _tokenStorage.saveToken(authSession.jwt);
+      await _tokenStorage.saveSession(
+        accessToken: authSession.accessToken,
+        refreshToken: authSession.refreshToken,
+      );
       debugPrint('⏱️ Token persisted at ${stopwatch.elapsedMilliseconds} ms');
 
       debugPrint('✅ Login successful: userId=${authSession.userId}, role=${authSession.role}');
       if (kDebugMode) {
-        debugPrint('🔐 JWT_ACCESS_TOKEN=${authSession.jwt}');
+        debugPrint('🔐 JWT_ACCESS_TOKEN=${authSession.accessToken}');
       }
 
       if (!mounted) {
@@ -202,14 +336,14 @@ class _AuthGateState extends State<AuthGate> {
           _isLoading = false;
           _isAuthenticated = true;
           _requiresOnboarding = !authSession.hasProfile!;
-          _jwt = authSession.jwt;
+          _jwt = authSession.accessToken;
           _userId = authSession.userId;
           _roleOverride = authSession.role;
           _profileSeed = null;
         });
         debugPrint('⏱️ Fast login path resolved in ${stopwatch.elapsedMilliseconds} ms');
       } else {
-        await _resolveProfileStateForUser(authSession.jwt, authSession.userId);
+        await _resolveProfileStateForUser(authSession.accessToken, authSession.userId);
         if (!mounted) {
           return;
         }
@@ -256,6 +390,12 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isBootstrapping) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     if (_isAuthenticated) {
       if (_requiresOnboarding) {
         return OnboardingScreen(

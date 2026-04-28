@@ -29,7 +29,7 @@ class SwipeCardsStack extends StatefulWidget {
     this.onCardSwiped,
     this.onStackEmpty,
     this.returnAnimationDuration = const Duration(milliseconds: 400),
-    this.exitAnimationDuration = const Duration(milliseconds: 300),
+    this.exitAnimationDuration = const Duration(milliseconds: 180),
   });
 
   @override

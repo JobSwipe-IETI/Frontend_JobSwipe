@@ -1,0 +1,9 @@
+Analyzing 3 items...                                            
+
+warning - The value of the field '_conversationsError' isn't used - lib\screens\home_screen.dart:82:11 - unused_field
+   info - Unnecessary cascade expression - lib\screens\home_screen.dart:1147:7 - avoid_single_cascade_in_expression_statements
+   info - Unnecessary cascade expression - lib\screens\home_screen.dart:1156:7 - avoid_single_cascade_in_expression_statements
+warning - The declaration '_buildChecklistSection' isn't referenced - lib\screens\home_screen.dart:2654:10 - unused_element
+warning - The operand can't be 'null', so the condition is always 'false' - lib\screens\home_screen.dart:3918:34 - unnecessary_null_comparison
+
+5 issues found. (ran in 6.5s)
