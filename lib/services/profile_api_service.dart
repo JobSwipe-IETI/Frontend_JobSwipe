@@ -6,7 +6,6 @@ import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
 
 class ProfileApiService {
-  static const Duration _profileRequestTimeout = Duration(seconds: 12);
   static const Duration _profileStatusTimeout = Duration(seconds: 4);
 
   ProfileApiService({http.Client? client}) : _client = client ?? http.Client();
@@ -26,8 +25,7 @@ class ProfileApiService {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $jwt',
           },
-        )
-        .timeout(_profileRequestTimeout);
+        );
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
@@ -162,6 +160,47 @@ class ProfileApiService {
     }
   }
 
+  Future<Map<String, dynamic>?> getProfileFeedback({
+    required String jwt,
+    required int userId,
+  }) async {
+    final Uri uri = Uri.parse('${AppConfig.backendBaseUrl}/profiles/user/$userId/feedback');
+
+    final response = await _client.get(
+      uri,
+      headers: <String, String>{
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $jwt',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    if (response.statusCode == 204) {
+      return null;
+    }
+
+    return null;
+  }
+
+  Future<void> reAnalyzeProfile({required String jwt, required int userId}) async {
+    final Uri uri = Uri.parse('${AppConfig.backendBaseUrl}/profiles/user/$userId/feedback/analyze');
+
+    final response = await _client.post(
+      uri,
+      headers: <String, String>{
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $jwt',
+      },
+    );
+
+    if (response.statusCode != 202 && response.statusCode != 200) {
+      throw ProfileApiException('Error re-analizando perfil (${response.statusCode}): ${response.body}');
+    }
+  }
+
   /// Calls PATCH /api/auth/me/role and returns the new JWT on success, or null.
   Future<String?> updateUserRole({
     required String jwt,
@@ -207,6 +246,33 @@ class ProfileApiService {
     }
 
     return fallback;
+  }
+
+  Future<void> updateUserPremiumStatus({
+    required String jwt,
+    required int userId,
+    required bool isPremium,
+  }) async {
+    final Uri uri =
+        Uri.parse('${AppConfig.backendBaseUrl}/users/$userId/premium');
+
+    final response = await _client
+        .patch(
+          uri,
+          headers: <String, String>{
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $jwt',
+          },
+          body: jsonEncode({'isPremium': isPremium}),
+        );
+
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      return;
+    }
+
+    throw ProfileApiException(
+      'Error actualizando estado premium (${response.statusCode}): ${response.body}',
+    );
   }
 }
 

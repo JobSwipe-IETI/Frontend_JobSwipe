@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
 
 import '../controllers/user_provider.dart';
+import '../services/profile_api_service.dart';
+import '../services/auth_service.dart';
 
 class CandidateProfileWidget extends StatefulWidget {
   const CandidateProfileWidget({
@@ -10,32 +13,45 @@ class CandidateProfileWidget extends StatefulWidget {
     required this.userProvider,
     required this.onLogout,
     required this.onEditProfile,
+    required this.jwt,
+    this.userId,
   });
 
   final UserProvider userProvider;
   final VoidCallback onLogout;
   final VoidCallback onEditProfile;
+  final String jwt;
+  final int? userId;
 
   @override
   State<CandidateProfileWidget> createState() => _CandidateProfileWidgetState();
 }
 
 class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
-  bool _notificationsOn = true;
-
-  final List<Map<String, String>> _stats = const [
-    {'label': 'Vistas', 'value': '0'},
-    {'label': 'Postulaciones', 'value': '0'},
-    {'label': 'Matches', 'value': '0'},
-    {'label': 'Score IA', 'value': '0%'},
-  ];
+  bool _isPremium = false;
+  bool _isUpdatingPremium = false;
 
   late List<String> _userSkills;
+
+  Map<String, dynamic>? _feedback;
+  bool _isLoadingFeedback = false;
+  String? _feedbackError;
+  int? _lastFeedbackUserId;
+  String? _lastFeedbackJwt;
+  final ProfileApiService _profileApi = ProfileApiService();
 
   @override
   void initState() {
     super.initState();
     _syncSkillsFromProfile();
+    _loadPremiumStatus();
+    _loadFeedbackIfPossible();
+  }
+
+  void _loadPremiumStatus() {
+    setState(() {
+      _isPremium = widget.userProvider.currentUser.isPremium;
+    });
   }
 
   @override
@@ -46,6 +62,25 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
     if (oldSkills != newSkills) {
       _syncSkillsFromProfile();
     }
+
+    // If JWT or userId changed, reload feedback
+    if (oldWidget.jwt != widget.jwt || oldWidget.userId != widget.userId) {
+      _loadFeedbackIfPossible();
+    }
+
+    if (oldWidget.userProvider.currentUser.isPremium !=
+        widget.userProvider.currentUser.isPremium) {
+      _loadPremiumStatus();
+      if (widget.userProvider.currentUser.isPremium) {
+        _loadFeedbackIfPossible();
+      } else if (mounted) {
+        setState(() {
+          _feedback = null;
+          _feedbackError = null;
+          _isLoadingFeedback = false;
+        });
+      }
+    }
   }
 
   void _syncSkillsFromProfile() {
@@ -55,6 +90,104 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
       return;
     }
     _userSkills = _parseSkills(raw);
+  }
+
+  Future<void> _loadFeedbackIfPossible() async {
+    final int? userId = widget.userId ?? AuthService.extractUserIdFromJwt(widget.jwt);
+    if (userId == null || widget.jwt.isEmpty || !_isPremium) {
+      if (mounted) {
+        setState(() {
+          _isLoadingFeedback = false;
+        });
+      }
+      return;
+    }
+
+    // No recargar si ya tenemos feedback para este usuario
+    if (_lastFeedbackUserId == userId && _lastFeedbackJwt == widget.jwt && _feedback != null) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingFeedback = true;
+      _feedbackError = null;
+    });
+
+    try {
+      final Map<String, dynamic>? fb = await _profileApi.getProfileFeedback(
+        jwt: widget.jwt,
+        userId: userId,
+      );
+      if (mounted) {
+        setState(() {
+          _feedback = fb;
+          _lastFeedbackUserId = userId;
+          _lastFeedbackJwt = widget.jwt;
+          _feedbackError = null;
+          _isLoadingFeedback = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _feedbackError = null;
+          _isLoadingFeedback = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _triggerReAnalysis() async {
+    final int? userId = widget.userId ?? AuthService.extractUserIdFromJwt(widget.jwt);
+    if (userId == null) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingFeedback = true;
+      _feedbackError = null;
+      _feedback = null;
+    });
+
+    try {
+      // Trigger re-analysis
+      await _profileApi.reAnalyzeProfile(
+        jwt: widget.jwt,
+        userId: userId,
+      );
+
+      // Poll for the saved feedback instead of failing fast.
+      const int maxAttempts = 8;
+      const Duration pollDelay = Duration(seconds: 3);
+      for (int attempt = 0; attempt < maxAttempts && mounted; attempt++) {
+        final Map<String, dynamic>? fb = await _profileApi.getProfileFeedback(
+          jwt: widget.jwt,
+          userId: userId,
+        );
+
+        if (fb != null) {
+          setState(() {
+            _feedback = fb;
+            _feedbackError = null;
+            _isLoadingFeedback = false;
+          });
+          return;
+        }
+
+        if (attempt < maxAttempts - 1) {
+          await Future.delayed(pollDelay);
+        }
+      }
+
+      await _loadFeedbackIfPossible();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _feedbackError = null;
+          _isLoadingFeedback = false;
+        });
+      }
+    }
   }
 
   List<String> _parseSkills(String raw) {
@@ -93,7 +226,7 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
                   children: [
                     _buildProfileCompleteness(),
                     const SizedBox(height: 12),
-                    _buildStatsGrid(),
+                    _buildAiFeedbackCard(),
                     const SizedBox(height: 12),
                     _buildSkillsCard(),
                     const SizedBox(height: 12),
@@ -150,6 +283,24 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
                 ),
               ),
               const Spacer(),
+              if (_isPremium)
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF7E6),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.amber.shade200),
+                  ),
+                  child: Text(
+                    'PREMIUM',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.amber.shade800,
+                    ),
+                  ),
+                ),
               GestureDetector(
                 onTap: widget.onEditProfile,
                 child: Container(
@@ -301,7 +452,115 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
       ),
     );
   }
+  Widget _buildAiFeedbackCard() {
+    if (!_isPremium) {
+      return Container();
+    }
 
+    if (_isLoadingFeedback) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 12, offset: Offset(0,4))],
+        ),
+        child: Row(
+          children: const [
+            SizedBox(width: 16),
+            CircularProgressIndicator(),
+            SizedBox(width: 12),
+            Text('Cargando análisis IA guardado...'),
+          ],
+        ),
+      );
+    }
+
+    // If feedback is null or error, show the empty state with button
+    if (_feedback == null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 12, offset: Offset(0,4))],
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.auto_awesome_rounded, color: Color(0xFF7C4DFF)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _feedbackError != null
+                        ? 'Error al cargar análisis. Intenta nuevamente.'
+                        : 'No hay un análisis IA guardado para mostrar.',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _triggerReAnalysis,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Re-analizar perfil'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF7C4DFF),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Feedback exists: show compact controls only.
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 12, offset: Offset(0,4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.insights_rounded, color: Color(0xFF7C4DFF)),
+              const SizedBox(width: 8),
+              const Text('Mejoras IA', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+              const Spacer(),
+              Tooltip(
+                message: 'Re-analizar perfil',
+                child: IconButton(
+                  icon: const Icon(Icons.refresh_rounded, size: 20),
+                  onPressed: _triggerReAnalysis,
+                  color: const Color(0xFF7C4DFF),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Las mejoras IA se muestran en cada sección del perfil.',
+            style: TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
   int _getCompletionPercent(dynamic profile) {
     final fields = [
       profile.name,
@@ -337,57 +596,56 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
     return 'Tu perfil ya está casi completo';
   }
 
-  Widget _buildStatsGrid() {
-    return GridView.builder(
-      itemCount: _stats.length,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        childAspectRatio: 0.92,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-      ),
-      itemBuilder: (context, index) {
-        final stat = _stats[index];
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x0F000000),
-                blurRadius: 12,
-                offset: Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                stat['value']!,
-                style: const TextStyle(
-                  color: Color(0xFF263238),
-                  fontWeight: FontWeight.w800,
-                  fontSize: 15,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                stat['label']!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
-              ),
-            ],
-          ),
-        );
-      },
-    );
+  Map<String, Object> _severityPalette(String severity) {
+    if (severity == 'high') {
+      return {
+        'background': const Color(0xFFFFF1F2),
+        'border': const Color(0xFFFECACA),
+        'chip': const Color(0xFFFEE2E2),
+        'text': const Color(0xFFB91C1C),
+        'icon': Icons.warning_rounded,
+      };
+    }
+    if (severity == 'medium') {
+      return {
+        'background': const Color(0xFFFFFBEB),
+        'border': const Color(0xFFFDE68A),
+        'chip': const Color(0xFFFEF3C7),
+        'text': const Color(0xFFB45309),
+        'icon': Icons.info_rounded,
+      };
+    }
+    return {
+      'background': const Color(0xFFF8FAFC),
+      'border': const Color(0xFFE2E8F0),
+      'chip': const Color(0xFFE2E8F0),
+      'text': const Color(0xFF334155),
+      'icon': Icons.check_circle_rounded,
+    };
+  }
+
+  String _sectionSeverity(List<dynamic> suggestions) {
+    var hasMedium = false;
+    for (final item in suggestions) {
+      if (item is! Map<String, dynamic>) {
+        continue;
+      }
+      final severity = item['severity']?.toString() ?? 'low';
+      if (severity == 'high') {
+        return 'high';
+      }
+      if (severity == 'medium') {
+        hasMedium = true;
+      }
+    }
+    return hasMedium ? 'medium' : 'low';
   }
 
   Widget _buildSkillsCard() {
+    final skillsSuggestions = _suggestionsForAliases(
+      const ['habilidades', 'skills'],
+    );
+
     return _card(
       child: Column(
         children: [
@@ -442,12 +700,23 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
                     .toList(),
               ),
             ),
+          if (skillsSuggestions.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _buildSectionAlert(
+              sectionTitle: 'Habilidades',
+              suggestions: skillsSuggestions,
+            ),
+          ],
         ],
       ),
     );
   }
 
   Widget _buildExperienceCard() {
+    final experienceSuggestions = _suggestionsForAliases(
+      const ['experiencia', 'experience'],
+    );
+
     return _card(
       child: Column(
         children: [
@@ -467,12 +736,23 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
           ),
           const SizedBox(height: 12),
           ..._buildExperienceItems().map(_experienceTile),
+          if (experienceSuggestions.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _buildSectionAlert(
+              sectionTitle: 'Experiencia',
+              suggestions: experienceSuggestions,
+            ),
+          ],
         ],
       ),
     );
   }
 
   Widget _buildEducationCard() {
+    final educationSuggestions = _suggestionsForAliases(
+      const ['educación', 'educacion', 'education'],
+    );
+
     return _card(
       child: Column(
         children: [
@@ -492,6 +772,13 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
           ),
           const SizedBox(height: 12),
           ..._buildEducationItems().map(_educationTile),
+          if (educationSuggestions.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _buildSectionAlert(
+              sectionTitle: 'Educación',
+              suggestions: educationSuggestions,
+            ),
+          ],
         ],
       ),
     );
@@ -502,6 +789,16 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
     final salary = profile.expectedSalary != null
         ? 'USD ${profile.expectedSalary!.toStringAsFixed(0)}'
         : 'No especificado';
+    final additionalSuggestions = _suggestionsForAliases(
+      const [
+        'información adicional',
+        'informacion adicional',
+        'additional',
+        'contact',
+        'summary',
+        'professional_title',
+      ],
+    );
 
     return _card(
       child: Column(
@@ -525,8 +822,245 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
           _infoRow('Disponibilidad', profile.availability ?? 'No especificado'),
           _infoRow('GitHub', profile.githubUrl ?? 'No especificado', isLink: true),
           _infoRow('LinkedIn', profile.linkedinUrl ?? 'No especificado', isLink: true),
+          if (additionalSuggestions.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _buildSectionAlert(
+              sectionTitle: 'Información adicional',
+              suggestions: additionalSuggestions,
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+  String _normalizeSectionLabel(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .trim();
+  }
+
+  List<Map<String, dynamic>> _suggestionsForAliases(List<String> aliases) {
+    if (_feedback == null) {
+      return const [];
+    }
+
+    final normalizedAliases = aliases.map(_normalizeSectionLabel).toList();
+    final List<Map<String, dynamic>> collected = [];
+    final seen = <String>{};
+
+    final sections = _feedback?['sections'] as List<dynamic>? ?? [];
+    for (final section in sections) {
+      if (section is! Map<String, dynamic>) {
+        continue;
+      }
+      final sectionName = _normalizeSectionLabel(
+        section['name']?.toString() ?? section['category']?.toString() ?? '',
+      );
+      if (!normalizedAliases.contains(sectionName)) {
+        continue;
+      }
+
+      final items = section['suggestions'] as List<dynamic>? ?? [];
+      for (final item in items) {
+        if (item is! Map<String, dynamic>) {
+          continue;
+        }
+        final key = '${item['message']}-${item['severity']}';
+        if (seen.contains(key)) {
+          continue;
+        }
+        seen.add(key);
+        collected.add(item);
+      }
+    }
+
+    final flat = _feedback?['suggestions'] as List<dynamic>? ?? [];
+    for (final item in flat) {
+      if (item is! Map<String, dynamic>) {
+        continue;
+      }
+      final category = _normalizeSectionLabel(item['category']?.toString() ?? '');
+      if (!normalizedAliases.contains(category)) {
+        continue;
+      }
+      final key = '${item['message']}-${item['severity']}';
+      if (seen.contains(key)) {
+        continue;
+      }
+      seen.add(key);
+      collected.add(item);
+    }
+
+    return collected;
+  }
+
+  Widget _buildSectionAlert({
+    required String sectionTitle,
+    required List<Map<String, dynamic>> suggestions,
+  }) {
+    final severity = _sectionSeverity(suggestions);
+    final palette = _severityPalette(severity);
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: palette['background'] as Color,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: palette['border'] as Color),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _showSectionSuggestions(sectionTitle, suggestions),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Icon(
+                palette['icon'] as IconData,
+                size: 18,
+                color: palette['text'] as Color,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'IA detectó ${suggestions.length} mejora${suggestions.length == 1 ? '' : 's'} en $sectionTitle. Toca para ver.',
+                  style: TextStyle(
+                    color: palette['text'] as Color,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: palette['text'] as Color,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showSectionSuggestions(String sectionTitle, List<Map<String, dynamic>> suggestions) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Mejoras IA - $sectionTitle',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                  itemCount: suggestions.length,
+                  itemBuilder: (context, index) {
+                    final item = suggestions[index];
+                    final message = item['message']?.toString() ?? '';
+                    final severity = item['severity']?.toString() ?? 'low';
+                    final example = item['example']?.toString() ?? '';
+                    final palette = _severityPalette(severity);
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: palette['background'] as Color,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: palette['border'] as Color),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: palette['chip'] as Color,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              severity.toUpperCase(),
+                              style: TextStyle(
+                                color: palette['text'] as Color,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            message,
+                            style: const TextStyle(
+                              color: Color(0xFF334155),
+                              fontSize: 13,
+                              height: 1.3,
+                            ),
+                          ),
+                          if (example.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              example,
+                              style: const TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 12,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -633,27 +1167,96 @@ class _CandidateProfileWidgetState extends State<CandidateProfileWidget> {
             ),
           ),
           _settingRow(
-            icon: Icons.notifications_rounded,
-            label: 'Notificaciones',
+            icon: Icons.star_rounded,
+            label: 'Modo Premium',
             trailing: Switch.adaptive(
-              value: _notificationsOn,
-              onChanged: (v) => setState(() => _notificationsOn = v),
+              value: _isPremium,
+              onChanged: _isUpdatingPremium ? null : _updatePremiumStatus,
               activeTrackColor: const Color(0xFF1A237E),
             ),
           ),
-          _settingRow(icon: Icons.lock_rounded, label: 'Privacidad'),
-          _settingRow(
-            icon: Icons.language_rounded,
-            label: 'Idioma',
-            value: 'Espanol',
-          ),
-          _settingRow(
-            icon: Icons.help_center_rounded,
-            label: 'Ayuda y soporte',
-          ),
+
         ],
       ),
     );
+  }
+
+  Future<void> _updatePremiumStatus(bool newValue) async {
+    final int? userId = widget.userId ?? AuthService.extractUserIdFromJwt(widget.jwt);
+    if (userId == null) {
+      return;
+    }
+
+    setState(() {
+      _isUpdatingPremium = true;
+    });
+
+    try {
+      await _profileApi.updateUserPremiumStatus(
+        jwt: widget.jwt,
+        userId: userId,
+        isPremium: newValue,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isPremium = newValue;
+        _isUpdatingPremium = false;
+      });
+
+      // Actualizar el UserProvider también
+      widget.userProvider.updateUserPremiumStatus(newValue);
+
+      if (newValue) {
+        setState(() {
+          _feedback = null;
+          _feedbackError = null;
+          _isLoadingFeedback = true;
+        });
+
+        _profileApi.reAnalyzeProfile(
+          jwt: widget.jwt,
+          userId: userId,
+        ).catchError((_) {});
+
+        _loadFeedbackIfPossible();
+      } else {
+        setState(() {
+          _feedback = null;
+          _feedbackError = null;
+          _isLoadingFeedback = false;
+        });
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            newValue
+                ? '¡Bienvenido a Premium! Ya puedes usar análisis IA.'
+                : 'Has cambiado a modo Free.',
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isUpdatingPremium = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error actualizando estado: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _settingRow({

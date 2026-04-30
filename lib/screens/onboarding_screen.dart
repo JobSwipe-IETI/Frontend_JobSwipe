@@ -117,6 +117,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<_ExperienceDraft> _candidateExperiences = <_ExperienceDraft>[];
   String? _languageToAdd;
 
+  // ignore: unused_field
   static const List<String> _educationOptions = <String>[
     'Bachillerato',
     'Tecnico',
@@ -393,10 +394,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           payload: payload,
         );
 
-        final String? newJwt = await _profileApi.updateUserRole(
-          jwt: widget.jwt,
-          role: 'CANDIDATE',
-        );
+        String? newJwt;
+        if (!widget.isEditing) {
+          newJwt = await _profileApi.updateUserRole(
+            jwt: widget.jwt,
+            role: 'CANDIDATE',
+          );
+        }
 
         widget.onCompleted(<String, dynamic>{
           'role': 'CANDIDATE',
@@ -426,10 +430,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           payload: payload,
         );
 
-        final String? newJwt = await _profileApi.updateUserRole(
-          jwt: widget.jwt,
-          role: 'COMPANY',
-        );
+        String? newJwt;
+        if (!widget.isEditing) {
+          newJwt = await _profileApi.updateUserRole(
+            jwt: widget.jwt,
+            role: 'COMPANY',
+          );
+        }
 
         widget.onCompleted(<String, dynamic>{
           'role': 'COMPANY',
@@ -584,13 +591,31 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               ),
                               elevation: 0,
                             ),
-                            child: Text(
-                              _isSubmitting
-                                  ? 'Guardando...'
-                                  : widget.isEditing
-                                  ? 'Guardar cambios'
-                                  : 'Continuar',
-                            ),
+                            child: _isSubmitting
+                                ? const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.2,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                            Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(width: 10),
+                                      Text('Guardando...'),
+                                    ],
+                                  )
+                                : Text(
+                                    widget.isEditing
+                                        ? 'Guardar cambios'
+                                        : 'Continuar',
+                                  ),
                           ),
                         ),
                       ],

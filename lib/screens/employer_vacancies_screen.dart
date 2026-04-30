@@ -30,11 +30,14 @@ class _EmployerVacanciesScreenState extends State<EmployerVacanciesScreen>
   final VacancyService _vacancyService = VacancyService();
 
   List<VacancyModel> _vacancies = const [];
+  List<VacancyModel> _filteredVacancies = const [];
   bool _isLoading = true;
   final Set<int> _deletingVacancyIds = <int>{};
   String? _error;
   int _loadingStep = 0;
   Timer? _loadingTicker;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   static const List<String> _loadingMessages = <String>[
     'Cargando tus vacantes...',
@@ -62,6 +65,7 @@ class _EmployerVacanciesScreenState extends State<EmployerVacanciesScreen>
   @override
   void dispose() {
     _loadingTicker?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -93,6 +97,7 @@ class _EmployerVacanciesScreenState extends State<EmployerVacanciesScreen>
 
       setState(() {
         _vacancies = vacancies;
+        _applyFilters();
         _isLoading = false;
       });
     } on VacancyException catch (error) {
@@ -101,6 +106,7 @@ class _EmployerVacanciesScreenState extends State<EmployerVacanciesScreen>
       if (_isEmptyVacanciesScenario(error.message)) {
         setState(() {
           _vacancies = const <VacancyModel>[];
+          _filteredVacancies = const <VacancyModel>[];
           _error = null;
           _isLoading = false;
         });
@@ -131,6 +137,172 @@ class _EmployerVacanciesScreenState extends State<EmployerVacanciesScreen>
         normalized.contains('no hay') ||
         normalized.contains('sin vacantes') ||
         normalized.contains('vacante no fue encontrada');
+  }
+
+  void _applyFilters() {
+    final String query = _searchQuery.trim().toLowerCase();
+
+    _filteredVacancies = _vacancies.where((vacancy) {
+      if (query.isNotEmpty) {
+        final String haystack =
+            '${vacancy.title} ${vacancy.company} ${vacancy.location} ${vacancy.description}'
+                .toLowerCase();
+        if (!haystack.contains(query)) {
+          return false;
+        }
+      }
+
+      return true;
+    }).toList(growable: false);
+  }
+
+  void _updateSearchQuery(String value) {
+    setState(() {
+      _searchQuery = value;
+      _applyFilters();
+    });
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _searchController.clear();
+      _searchQuery = '';
+      _applyFilters();
+    });
+  }
+
+  Widget _buildFilterPanel() {
+    final bool hasFilters = _searchQuery.isNotEmpty;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white,
+            JobSwipeTheme.primaryIndigo.withValues(alpha: 0.04),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: JobSwipeTheme.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  gradient: JobSwipeTheme.primaryGradient,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.manage_search_rounded, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Filtros de vacantes',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: JobSwipeTheme.primaryBlue,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Busca por nombre entre tus vacantes publicadas.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.grey.shade600,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              if (hasFilters)
+                TextButton.icon(
+                  onPressed: _clearFilters,
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  label: const Text('Limpiar'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return _buildFilterTextField(
+                label: 'Buscar por nombre',
+                controller: _searchController,
+                onChanged: _updateSearchQuery,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterTextField({
+    required String label,
+    required TextEditingController controller,
+    required ValueChanged<String> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: JobSwipeTheme.primaryBlue.withValues(alpha: 0.78),
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+        ),
+        TextField(
+          controller: controller,
+          onChanged: onChanged,
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            hintText: 'Escribe el cargo o palabra clave',
+            hintStyle: TextStyle(
+              color: Colors.grey.shade500,
+              fontSize: 13,
+            ),
+            prefixIcon: const Icon(Icons.search_rounded),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: JobSwipeTheme.borderColor),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: JobSwipeTheme.borderColor),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: JobSwipeTheme.primaryIndigo, width: 1.2),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _editVacancy(VacancyModel vacancy) async {
@@ -440,10 +612,52 @@ class _EmployerVacanciesScreenState extends State<EmployerVacanciesScreen>
               );
             }
 
+            if (_filteredVacancies.isEmpty) {
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _buildHeaderBanner(),
+                  ),
+                  _buildFilterPanel(),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.48,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.search_off_rounded,
+                            size: 64,
+                            color: JobSwipeTheme.primaryIndigo.withValues(alpha: 0.35),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No hay coincidencias con esos filtros',
+                            style: Theme.of(context).textTheme.headlineSmall,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Prueba otro nombre o limpia la búsqueda.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+
             return ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              itemCount: _vacancies.length + 1,
+              itemCount: _filteredVacancies.length + 2,
               itemBuilder: (context, index) {
                 if (index == 0) {
                   return Padding(
@@ -452,7 +666,11 @@ class _EmployerVacanciesScreenState extends State<EmployerVacanciesScreen>
                   );
                 }
 
-                return _buildVacancyCard(context, _vacancies[index - 1]);
+                if (index == 1) {
+                  return _buildFilterPanel();
+                }
+
+                return _buildVacancyCard(context, _filteredVacancies[index - 2]);
               },
             );
           },
@@ -627,4 +845,5 @@ class _EmployerVacanciesScreenState extends State<EmployerVacanciesScreen>
       ),
     );
   }
+
 }

@@ -237,6 +237,9 @@ class _SwipeCardsStackState extends State<SwipeCardsStack>
 
   /// Muestra información detallada de la vacante
   void _showVacancyInfo(VacancyModel vacancy) {
+    final String matchLabel = vacancy.matchPercentage != null
+        ? '${vacancy.matchPercentage!.toStringAsFixed(0)}%'
+        : 'Analizando';
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -305,7 +308,7 @@ class _SwipeCardsStackState extends State<SwipeCardsStack>
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            '${vacancy.matchPercentage.toStringAsFixed(0)}%',
+                            matchLabel,
                             style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,

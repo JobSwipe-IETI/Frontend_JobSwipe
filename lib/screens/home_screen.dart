@@ -10,6 +10,7 @@ import '../controllers/swipe_controller.dart';
 import '../controllers/user_provider.dart';
 import '../widgets/candidate_profile_widget.dart';
 import '../widgets/company_profile_widget.dart';
+import '../widgets/all_vacancies_widget.dart';
 import 'onboarding_screen.dart';
 import 'employer_vacancies_tab_screen.dart';
 import 'conversation_chat_screen.dart';
@@ -17,6 +18,7 @@ import '../services/auth_service.dart';
 import '../services/chat_service.dart';
 import '../services/profile_api_service.dart';
 import '../services/vacancy_service.dart';
+import '../services/premium_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -51,9 +53,11 @@ class _HomeScreenState extends State<HomeScreen>
   final ProfileApiService _profileApiService = ProfileApiService();
   final VacancyService _vacancyService = VacancyService();
   final ChatService _chatService = ChatService();
+  final PremiumService _premiumService = PremiumService();
   late UserProvider _userProvider;
   List<VacancyModel> _exploreVacancies = const [];
   bool _isLoadingExplore = false;
+  bool _isOpeningProfileEditor = false;
   String? _exploreError;
   bool _showingFallbackVacancies = false;
   bool _isLoadingCompanyDashboard = false;
@@ -82,6 +86,7 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void>? _conversationsLoadInFlight;
   Future<void>? _applicationsLoadInFlight;
   String? _matchesError;
+  // ignore: unused_field
   String? _conversationsError;
   String? _applicationsError;
   DateTime? _lastCompanyDashboardSyncAt;
@@ -114,6 +119,7 @@ class _HomeScreenState extends State<HomeScreen>
   Timer? _realtimeSyncTicker;
   StreamSubscription<RealtimeNotificationEvent>? _notificationRealtimeSubscription;
   DateTime? _lastExploreSyncAt;
+  VoidCallback? _userProviderListener;  // Reference to UserProvider listener for cleanup
   static const List<String> _exploreLoadingMessages = <String>[
     'Cargando vacantes...',
     'Organizando la informacion del perfil...',
@@ -162,6 +168,85 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  // ignore: unused_element
+  Future<void> _handleUpgradeToPremium() async {
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              const Text(
+                'Actualizando tu cuenta...',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    try {
+      final userId = AuthService.extractUserIdFromJwt(widget.jwt);
+      if (userId == null) {
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error: No se pudo extraer tu ID de usuario')),
+        );
+        return;
+      }
+
+      // Call backend to upgrade to premium
+      await _premiumService.upgradeToPremium(
+        jwt: widget.jwt,
+        userId: userId,
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      // Update UserProvider locally
+      _userProvider.updateUserPremiumStatus(true);
+      
+      // Force rebuild to reflect premium status
+      setState(() {});
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✨ ¡Bienvenido a Premium! Acceso a matching desbloqueado'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+
+      // Refresh recommended vacancies to trigger AI analysis
+      unawaited(_loadRecommendedVacancies());
+      
+      // After 3 seconds, do silent re-login to get JWT with isPremium for persistence
+      Future<void>.delayed(const Duration(seconds: 3), () {
+        if (mounted) {
+          widget.onLogout();
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al actualizar: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -174,6 +259,13 @@ class _HomeScreenState extends State<HomeScreen>
 
     // Inicializar UserProvider con el perfil correcto basado en el rol
     _userProvider = UserProvider(initialUser: _buildFallbackProfile(isCompany));
+    
+    // Listen to UserProvider changes to trigger rebuilds
+    _userProviderListener = () {
+      debugPrint('🔄 UserProvider changed: isPremium=${_userProvider.currentUser.isPremium}');
+      if (mounted) setState(() {});
+    };
+    _userProvider.addListener(_userProviderListener!);
 
     _applyProfileSeed(widget.profileSeed);
 
@@ -213,6 +305,9 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   UserProfile _buildFallbackProfile(bool isCompany) {
+    final isPremium = AuthService.extractIsPremiumFromJwt(widget.jwt);
+    debugPrint('🔧 _buildFallbackProfile: isPremium=$isPremium from JWT');
+    
     return UserProfile(
       id:
           (widget.userId ?? AuthService.extractUserIdFromJwt(widget.jwt))
@@ -248,6 +343,7 @@ class _HomeScreenState extends State<HomeScreen>
       hiringContactName: '',
       hiringContactEmail: '',
       createdAt: DateTime.now(),
+      isPremium: isPremium,
     );
   }
 
@@ -284,8 +380,11 @@ class _HomeScreenState extends State<HomeScreen>
       final bool isCompany = roleClaim?.toUpperCase() == 'COMPANY';
       final user = _mapUserProfileFromBackend(profileJson, isCompany);
 
+      debugPrint('🔧 _loadUserProfile: got user with isPremium=${user.isPremium} from backend');
+
       setState(() {
         _userProvider.setUser(user);
+        debugPrint('📊 UserProvider updated: isPremium=${_userProvider.currentUser.isPremium}');
       });
       debugPrint('⏱️ _loadUserProfile completed in ${stopwatch.elapsedMilliseconds} ms');
     } catch (error) {
@@ -299,6 +398,14 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _openProfileEditor() async {
+    if (mounted) {
+      setState(() {
+        _isOpeningProfileEditor = true;
+      });
+    }
+
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
         builder: (_) => OnboardingScreen(
@@ -313,11 +420,17 @@ class _HomeScreenState extends State<HomeScreen>
     );
 
     if (result == null || !mounted) {
+      if (mounted) {
+        setState(() {
+          _isOpeningProfileEditor = false;
+        });
+      }
       return;
     }
 
     setState(() {
       _applyProfileSeed(result);
+      _isOpeningProfileEditor = false;
     });
   }
 
@@ -467,11 +580,16 @@ class _HomeScreenState extends State<HomeScreen>
       createdAt:
           DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
           DateTime.now(),
+      isPremium:
+          (json['isPremium'] as bool?) ?? _userProvider.currentUser.isPremium,
     );
   }
 
   @override
   void dispose() {
+    if (_userProviderListener != null) {
+      _userProvider.removeListener(_userProviderListener!);
+    }
     WidgetsBinding.instance.removeObserver(this);
     _exploreLoadingTicker?.cancel();
     _exploreEmptyAutoRefreshTicker?.cancel();
@@ -657,42 +775,93 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              JobSwipeTheme.primaryIndigo.withValues(alpha: 0.04),
-              const Color(0xFF1E3A8A).withValues(alpha: 0.02),
-              Colors.white,
-            ],
-            stops: const [0, 0.5, 1],
+      body: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  JobSwipeTheme.primaryIndigo.withValues(alpha: 0.04),
+                  const Color(0xFF1E3A8A).withValues(alpha: 0.02),
+                  Colors.white,
+                ],
+                stops: const [0, 0.5, 1],
+              ),
+            ),
+            child: SafeArea(
+              child: PageView(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                onPageChanged: (index) {
+                  setState(() {
+                    _selectedIndex = index;
+                    _animationController.forward(from: 0.0);
+                  });
+                },
+                children: _buildPageViewChildren(),
+              ),
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: PageView(
-            controller: _pageController,
-            physics: const NeverScrollableScrollPhysics(),
-            onPageChanged: (index) {
-              setState(() {
-                _selectedIndex = index;
-                _animationController.forward(from: 0.0);
-              });
-            },
-            children: _buildPageViewChildren(),
-          ),
-        ),
+          if (_isOpeningProfileEditor)
+            Positioned.fill(
+              child: AbsorbPointer(
+                absorbing: true,
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 18,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x22000000),
+                            blurRadius: 24,
+                            offset: Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: CircularProgressIndicator(strokeWidth: 3),
+                          ),
+                          SizedBox(height: 12),
+                          Text(
+                            'Cargando edición...',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       bottomNavigationBar: _buildBottomNav(),
     );
   }
 
   List<Widget> _buildPageViewChildren() {
-    final pages = [_buildExplore(), _buildMatches(), _buildProfile()];
-
     if (_isCompanyAccount) {
-      pages.add(
+      return [
+        _buildExplore(),
+        _buildMatches(),
+        _buildProfile(),
         EmployerVacanciesTabScreen(
           userProvider: _userProvider,
           jwt: widget.jwt,
@@ -700,14 +869,28 @@ class _HomeScreenState extends State<HomeScreen>
             unawaited(_loadCompanyDashboard(silent: true));
           },
         ),
-      );
+      ];
+      } else {
+      return [
+        _buildExplore(),
+        _buildMatches(),
+        AllVacanciesWidget(
+          key: const PageStorageKey<String>('all-vacancies-tab'),
+          jwt: widget.jwt,
+          isPremium: _userProvider.currentUser.isPremium,
+        ),
+        _buildProfile(),
+      ];
     }
-
-    return pages;
   }
 
   Widget _buildExplore() {
-    final String sectionTitle = _isCompanyAccount ? 'Actividad' : 'Explora';
+    final String sectionTitle = _isCompanyAccount ? 'Actividad' : 'Matching';
+
+    // Check if candidate user is free (not premium) and restrict access
+    if (!_isCompanyAccount && !_userProvider.currentUser.isPremium) {
+      return _buildPremiumRequiredWidget(sectionTitle);
+    }
 
     return Column(
       children: [
@@ -724,6 +907,53 @@ class _HomeScreenState extends State<HomeScreen>
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 32, 20, 20),
             child: _buildExploreBody(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPremiumRequiredWidget(String title) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [_buildHeader(title)],
+          ),
+        ),
+        Expanded(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.lock_outline_rounded,
+                    size: 64,
+                    color: JobSwipeTheme.primaryIndigo,
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Matching Premium',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Accede a ofertas exclusivas y compatibilidades precisas con tu perfil.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey.shade600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ],
@@ -2207,15 +2437,9 @@ class _HomeScreenState extends State<HomeScreen>
           Text(
             _showingFallbackVacancies
                 ? 'No hay más vacantes por ahora.'
-                : 'No hay recomendaciones disponibles todavía.',
+                : 'Estamos analizando tu compatibilidad. En breve cargaran tus vacantes recomendadas.',
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 15),
-          ),
-          const SizedBox(height: 14),
-          ElevatedButton.icon(
-            onPressed: _isLoadingExplore ? null : _loadRecommendedVacancies,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Buscar nuevamente'),
           ),
           const SizedBox(height: 8),
           Text(
@@ -2240,155 +2464,49 @@ class _HomeScreenState extends State<HomeScreen>
       _isLoadingExplore = true;
       _exploreError = null;
     });
-    _startExploreLoadingMessages();
 
     try {
-      final String jobId = await _vacancyService.startRecommendedVacanciesJob(
+      // El scheduler en backend ya analiza automáticamente para usuarios premium
+      // Frontend solo obtiene las recomendaciones ya calculadas
+      final List<VacancyModel> recommendations =
+          await _vacancyService.getRecommendedVacancies(
         jwt: widget.jwt,
-        minScore: 70,
+        minScore: 0,
         limit: 20,
       );
-
-      final Set<int> streamedRecommendationIds = _exploreVacancies
-          .map((item) => item.id)
-          .toSet();
-      int partialOffset = 0;
-
-      void appendPartialItems(List<VacancyModel> items) {
-        if (items.isEmpty || !mounted) {
-          return;
-        }
-
-        bool changed = false;
-        final List<VacancyModel> updated = List<VacancyModel>.from(
-          _exploreVacancies,
-        );
-
-        for (final VacancyModel item in items) {
-          if (streamedRecommendationIds.add(item.id)) {
-            updated.add(item);
-            changed = true;
-          }
-        }
-
-        if (!changed) {
-          return;
-        }
-
-        setState(() {
-          _exploreVacancies = updated;
-          _showingFallbackVacancies = false;
-        });
-      }
-
-      RecommendationJobStatus? status;
-      for (int i = 0; i < 150; i++) {
-        status = await _vacancyService.getRecommendedVacanciesJobStatus(
-          jwt: widget.jwt,
-          jobId: jobId,
-        );
-
-        final RecommendationJobPartial partial = await _vacancyService
-            .getRecommendedVacanciesJobPartial(
-              jwt: widget.jwt,
-              jobId: jobId,
-              offset: partialOffset,
-              limit: 6,
-            );
-        partialOffset = partial.nextOffset;
-        appendPartialItems(partial.items);
-
-        if (mounted) {
-          setState(() {
-            _exploreProgressPercent = status!.progressPercent;
-            _exploreBackendMessage = status.message;
-          });
-        }
-
-        if (status.isCompleted) {
-          break;
-        }
-
-        if (status.isFailed) {
-          throw VacancyException(
-            (status.error != null && status.error!.isNotEmpty)
-                ? status.error!
-                : 'No se pudieron generar recomendaciones.',
-          );
-        }
-
-        await Future.delayed(const Duration(milliseconds: 500));
-      }
-
-      for (int i = 0; i < 6; i++) {
-        final RecommendationJobPartial trailing = await _vacancyService
-            .getRecommendedVacanciesJobPartial(
-              jwt: widget.jwt,
-              jobId: jobId,
-              offset: partialOffset,
-              limit: 20,
-            );
-
-        if (trailing.nextOffset == partialOffset) {
-          break;
-        }
-
-        partialOffset = trailing.nextOffset;
-        appendPartialItems(trailing.items);
-      }
-
-      if (status == null ||
-          (!status.isCompleted && _exploreVacancies.isEmpty)) {
-        throw const VacancyException(
-          'Las recomendaciones estan tardando mas de lo esperado. Intenta nuevamente.',
-        );
-      }
 
       if (!mounted) {
         return;
       }
 
-      if (_exploreVacancies.isEmpty) {
-        setState(() {
-          _showingFallbackVacancies = true;
-          _isLoadingExplore = false;
-        });
-        _stopExploreLoadingMessages();
+      setState(() {
+        _exploreVacancies = recommendations;
+        _isLoadingExplore = false;
+        _showingFallbackVacancies = false;
+      });
+    } on VacancyException catch (e) {
+      if (!mounted) {
         return;
       }
-
       setState(() {
-        _showingFallbackVacancies = false;
+        _exploreError = e.message;
         _isLoadingExplore = false;
       });
-      _stopExploreLoadingMessages();
-    } catch (error) {
-      try {
-        final List<VacancyModel> fallback = await _vacancyService
-            .getExploreVacancies(jwt: widget.jwt, limit: 20);
 
-        if (!mounted) {
-          return;
-        }
-
-        setState(() {
-          _exploreVacancies = fallback;
-          _showingFallbackVacancies = true;
-          _isLoadingExplore = false;
-          _exploreError = null;
-        });
-        _stopExploreLoadingMessages();
-      } catch (_) {
-        if (!mounted) {
-          return;
-        }
-        setState(() {
-          _isLoadingExplore = false;
-          _exploreError =
-              'No se pudieron cargar vacantes por ahora. Intenta de nuevo en un momento.';
-        });
-        _stopExploreLoadingMessages();
+      _showFloatingNotification(
+        e.message,
+        icon: Icons.wifi_off_rounded,
+        accentColor: JobSwipeTheme.errorRed,
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
       }
+      setState(() {
+        _exploreError =
+            'Error cargando recomendaciones. Intenta nuevamente.';
+        _isLoadingExplore = false;
+      });
     }
   }
 
@@ -3017,6 +3135,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  // ignore: unused_element
   Widget _buildChecklistSection({
     required String title,
     required List<String> options,
@@ -3919,6 +4038,8 @@ class _HomeScreenState extends State<HomeScreen>
             userProvider: _userProvider,
             onLogout: _showLogoutDialog,
             onEditProfile: _openProfileEditor,
+            jwt: widget.jwt,
+            userId: widget.userId,
           )
         : CompanyProfileWidget(
             userProvider: _userProvider,
@@ -4059,7 +4180,7 @@ class _HomeScreenState extends State<HomeScreen>
         : '${match.counterpartName} - ${_formatRelativeTime(match.matchedAt)}';
     final String statusLabel = match.compatibilityPercentage != null
         ? '${match.compatibilityPercentage!.toStringAsFixed(0)}%'
-        : (match.compatibilityLevel ?? 'Match');
+        : 'Analizando';
 
     final bool hasSignal = _matchHasUnreadSignal(match);
 
@@ -4448,8 +4569,8 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildBottomNav() {
     // Construir tabs dinámicamente según el tipo de usuario
     final tabs = _isCompanyAccount
-      ? const ['Explora', 'Conexiones', 'Perfil', 'Vacantes']
-      : const ['Explora', 'Conexiones', 'Perfil'];
+      ? const ['Actividad', 'Conexiones', 'Perfil', 'Vacantes']
+      : const ['Matching', 'Conexiones', 'Todas', 'Perfil'];
 
     final icons = _isCompanyAccount
         ? const [
@@ -4461,6 +4582,7 @@ class _HomeScreenState extends State<HomeScreen>
         : const [
             Icons.explore_rounded,
             Icons.favorite_rounded,
+            Icons.dashboard_rounded,
             Icons.person_rounded,
           ];
 

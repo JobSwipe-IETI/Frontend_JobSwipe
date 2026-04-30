@@ -99,6 +99,20 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _restoreSession() async {
     final Stopwatch stopwatch = Stopwatch()..start();
     try {
+      final String? refreshToken = await _tokenStorage.readRefreshToken();
+      if (refreshToken != null && refreshToken.isNotEmpty) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _isLoading = true;
+        });
+        final bool refreshed = await _tryRefreshSession(refreshToken);
+        if (refreshed) {
+          return;
+        }
+      }
+
       final String? token = await _tokenStorage.readAccessToken();
       if (!mounted) {
         return;
@@ -111,14 +125,6 @@ class _AuthGateState extends State<AuthGate> {
 
         final bool restoredFromStorage = await _tryRestoreSessionWithToken(token);
         if (restoredFromStorage) {
-          return;
-        }
-      }
-
-      final String? refreshToken = await _tokenStorage.readRefreshToken();
-      if (refreshToken != null && refreshToken.isNotEmpty) {
-        final bool refreshed = await _tryRefreshSession(refreshToken);
-        if (refreshed) {
           return;
         }
       }

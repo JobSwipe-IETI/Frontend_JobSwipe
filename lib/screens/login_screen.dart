@@ -64,13 +64,19 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final mediaQuery = MediaQuery.of(context);
+    final screenHeight = mediaQuery.size.height;
+    final screenWidth = mediaQuery.size.width;
+    final bool compact = screenHeight < 760 || screenWidth < 380;
+    final double horizontalPadding = screenWidth > 900 ? 40 : 24;
+    final double topSpacing = compact ? 28 : 44;
+    final double bottomSpacing = compact ? 36 : 56;
+    final double cardPadding = compact ? 34 : 44;
+    final double cardRadius = compact ? 38 : 46;
     
     return Scaffold(
       body: Container(
         width: screenWidth,
-        height: screenHeight,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -140,65 +146,71 @@ class _LoginScreenState extends State<LoginScreen>
             SafeArea(
               child: SingleChildScrollView(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    children: [
-                      SizedBox(height: screenHeight * 0.05),
-                      
-                      FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: SlideTransition(
-                          position: _slideAnimation,
-                          child: ScaleTransition(
-                            scale: _scaleAnimation,
-                            child: Container(
-                              constraints: const BoxConstraints(maxWidth: 550),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(50),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.25),
-                                    blurRadius: 60,
-                                    spreadRadius: 15,
-                                    offset: const Offset(0, 25),
-                                  ),
-                                  BoxShadow(
-                                    color: const Color(0xFF42A5F5).withOpacity(0.2),
-                                    blurRadius: 40,
-                                    spreadRadius: 10,
-                                  ),
-                                ],
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(48),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    _buildLogoSection(),
-                                    const SizedBox(height: 40),
-                                    _buildTitleSection(),
-                                    const SizedBox(height: 18),
-                                    _buildDescriptionSection(),
-                                    const SizedBox(height: 50),
-                                    _buildGoogleLoginButton(context),
-                                    if (widget.errorMessage != null) ...[
-                                      const SizedBox(height: 28),
-                                      _buildErrorMessage(),
-                                    ],
-                                    const SizedBox(height: 40),
-                                    _buildTermsAndPrivacy(context),
+                  padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: screenHeight - mediaQuery.padding.top - mediaQuery.padding.bottom,
+                    ),
+                    child: Column(
+                      children: [
+                        SizedBox(height: topSpacing),
+                        FadeTransition(
+                          opacity: _fadeAnimation,
+                          child: SlideTransition(
+                            position: _slideAnimation,
+                            child: ScaleTransition(
+                              scale: _scaleAnimation,
+                              child: Container(
+                                constraints: BoxConstraints(
+                                  maxWidth: compact ? 500 : 560,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(cardRadius),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.22),
+                                      blurRadius: 54,
+                                      spreadRadius: 12,
+                                      offset: const Offset(0, 22),
+                                    ),
+                                    BoxShadow(
+                                      color: const Color(0xFF42A5F5).withOpacity(0.18),
+                                      blurRadius: 30,
+                                      spreadRadius: 6,
+                                    ),
                                   ],
+                                ),
+                                child: Padding(
+                                  padding: EdgeInsets.all(cardPadding),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      _buildLogoSection(),
+                                      SizedBox(height: compact ? 28 : 36),
+                                      _buildTitleSection(),
+                                      SizedBox(height: compact ? 16 : 20),
+                                      _buildDescriptionSection(),
+                                      SizedBox(height: compact ? 32 : 44),
+                                      _buildGoogleLoginButton(context),
+                                      if (widget.errorMessage != null) ...[
+                                        SizedBox(height: compact ? 20 : 26),
+                                        _buildErrorMessage(),
+                                      ],
+                                      SizedBox(height: compact ? 26 : 34),
+                                      _buildTermsAndPrivacy(context),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      SizedBox(height: screenHeight * 0.08),
-                    ],
+                        SizedBox(height: bottomSpacing),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -215,8 +227,8 @@ class _LoginScreenState extends State<LoginScreen>
       children: [
         // Solo la sombra difuminada sin círculo sólido
         Container(
-          width: 280,
-          height: 280,
+          width: 250,
+          height: 250,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             boxShadow: [
@@ -236,12 +248,12 @@ class _LoginScreenState extends State<LoginScreen>
         // Logo en el centro
         Image.asset(
           'assets/images/logoswipe.png',
-          height: 220,
-          width: 220,
+          height: 190,
+          width: 190,
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) => const Icon(
             Icons.business,
-            size: 140,
+            size: 124,
             color: Colors.white,
           ),
         ),
@@ -265,7 +277,7 @@ class _LoginScreenState extends State<LoginScreen>
             'JobSwipe AI',
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 48,
+              fontSize: 44,
               fontWeight: FontWeight.w900,
               color: Colors.white,
               letterSpacing: -1.5,
@@ -284,10 +296,10 @@ class _LoginScreenState extends State<LoginScreen>
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.grey.shade700,
-            fontSize: 18,
+            fontSize: 17,
             fontWeight: FontWeight.w600,
-            height: 1.6,
-            letterSpacing: 0.4,
+            height: 1.5,
+            letterSpacing: 0.2,
           ),
         ),
       ],
@@ -295,7 +307,9 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildGoogleLoginButton(BuildContext context) {
-    return Container(
+    return SizedBox(
+      width: double.infinity,
+      child: Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -329,7 +343,6 @@ class _LoginScreenState extends State<LoginScreen>
             padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
               children: [
                 if (widget.isLoading)
                   SizedBox(
@@ -354,19 +367,27 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
                 const SizedBox(width: 14),
-                Text(
-                  widget.isLoading ? 'Iniciando sesión...' : 'Continuar con Google',
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.6,
-                    color: Colors.white,
+                Flexible(
+                  child: Text(
+                    widget.isLoading
+                        ? 'Iniciando sesión...'
+                        : 'Continuar con Google',
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
         ),
+      ),
       ),
     );
   }

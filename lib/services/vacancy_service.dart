@@ -20,7 +20,7 @@ class VacancyService {
 
   Future<List<VacancyModel>> getRecommendedVacancies({
     required String jwt,
-    double minScore = 70,
+    double minScore = 0,
     int limit = 20,
   }) async {
     final Uri uri =
@@ -37,6 +37,7 @@ class VacancyService {
           .get(
             uri,
             headers: <String, String>{
+              'Authorization': 'Bearer $jwt',
               'Content-Type': 'application/json',
             },
           )
@@ -246,9 +247,24 @@ class VacancyService {
 
   Future<List<VacancyModel>> getExploreVacancies({
     required String jwt,
-    int limit = 20,
+    int limit = 100,
+    String? experienceLevel,
+    String? sector,
+    String? workType,
   }) async {
-    final Uri uri = Uri.parse('${AppConfig.backendBaseUrl}/vacancies');
+    final Map<String, String> queryParams = {'limit': limit.toString()};
+    if (experienceLevel != null && experienceLevel.isNotEmpty) {
+      queryParams['experienceLevel'] = experienceLevel;
+    }
+    if (sector != null && sector.isNotEmpty) {
+      queryParams['sector'] = sector;
+    }
+    if (workType != null && workType.isNotEmpty) {
+      queryParams['workType'] = workType;
+    }
+
+    final Uri uri = Uri.parse('${AppConfig.backendBaseUrl}/vacancies')
+        .replace(queryParameters: queryParams);
 
     final http.Response response = await _client
         .get(
@@ -660,7 +676,7 @@ class VacancyService {
 
     if (response.statusCode == 401) {
       throw const VacancyException(
-        'Tu sesion expiro. Inicia sesion nuevamente.',
+        'Tu sesión expiró o no tienes permiso. Por favor, inicia sesión nuevamente.',
       );
     }
 
@@ -727,7 +743,7 @@ class VacancyService {
 
     if (response.statusCode == 401) {
       throw const VacancyException(
-        'Tu sesion expiro. Inicia sesion nuevamente.',
+        'Tu sesión expiró o no tienes permiso. Por favor, inicia sesión nuevamente.',
       );
     }
 
@@ -882,25 +898,30 @@ class VacancyService {
   }
 
   VacancyModel _mapRecommendedVacancy(Map<String, dynamic> json) {
-    final double score = _asDouble(json['compatibilityPercentage']) ?? 0;
+    final double? score = _asDouble(json['compatibilityPercentage']);
     final int id = _asInt(json['vacancyId']) ?? _asInt(json['id']) ?? 0;
     final String title = _asString(json['title']) ?? 'Vacante recomendada';
+    final String company =
+        _asString(json['companyName']) ?? _asString(json['company']) ?? 'Empresa recomendada';
     final String location =
         _asString(json['location']) ?? 'Ubicación por definir';
     final String description =
         _asString(json['feedback']) ??
-        'Esta vacante fue recomendada por tu nivel de compatibilidad.';
+        (score == null
+            ? 'Estamos analizando tu compatibilidad con esta vacante. En breve tendras el resultado.'
+            : 'Esta vacante fue recomendada por tu nivel de compatibilidad.');
 
     return VacancyModel(
       id: id,
       title: title,
-      company: 'Empresa recomendada',
+      company: company,
       location: location,
       salary: 'Salario por definir',
       matchPercentage: score,
-      badge: _recommendationBadge(score),
+      badge: score == null ? 'Analizando' : _recommendationBadge(score),
       description: description,
       logo: 'recommended',
+      createdAt: _asDateTime(json['createdAt']) ?? _asDateTime(json['created_at']),
     );
   }
 
@@ -926,6 +947,7 @@ class VacancyService {
       badge: 'Exploración adicional',
       description: description,
       logo: 'explore',
+      createdAt: _asDateTime(json['createdAt']) ?? _asDateTime(json['created_at']),
     );
   }
 
@@ -947,6 +969,7 @@ class VacancyService {
       badge: 'Administrar',
       description: description,
       logo: 'company',
+      createdAt: _asDateTime(json['createdAt']) ?? _asDateTime(json['created_at']),
     );
   }
 
@@ -1015,6 +1038,23 @@ class VacancyService {
 
   bool _isEmptyCollectionResponse(int statusCode) {
     return statusCode == 204 || statusCode == 404;
+  }
+
+  DateTime? _asDateTime(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    if (value is DateTime) {
+      return value;
+    }
+
+    final String raw = value.toString().trim();
+    if (raw.isEmpty) {
+      return null;
+    }
+
+    return DateTime.tryParse(raw);
   }
 }
 

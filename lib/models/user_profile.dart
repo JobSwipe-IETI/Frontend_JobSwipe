@@ -37,6 +37,7 @@ class UserProfile {
   final String? hiringContactName;
   final String? hiringContactEmail;
   final DateTime createdAt;
+  final bool isPremium;
 
   UserProfile({
     required this.id,
@@ -70,6 +71,7 @@ class UserProfile {
     this.hiringContactName,
     this.hiringContactEmail,
     required this.createdAt,
+    this.isPremium = false,
   });
 
   /// Copia el perfil con nuevos valores
@@ -105,6 +107,7 @@ class UserProfile {
     String? hiringContactName,
     String? hiringContactEmail,
     DateTime? createdAt,
+    bool? isPremium,
   }) {
     return UserProfile(
       id: id ?? this.id,
@@ -138,6 +141,7 @@ class UserProfile {
       hiringContactName: hiringContactName ?? this.hiringContactName,
       hiringContactEmail: hiringContactEmail ?? this.hiringContactEmail,
       createdAt: createdAt ?? this.createdAt,
+      isPremium: isPremium ?? this.isPremium,
     );
   }
 

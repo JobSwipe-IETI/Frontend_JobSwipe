@@ -46,6 +46,52 @@ class ChatService {
     cacheMessages(message.conversationId, next);
   }
 
+  ChatException _buildChatException(
+    http.Response response,
+    String fallbackMessage,
+  ) {
+    String? detail;
+    if (response.body.trim().isNotEmpty) {
+      try {
+        final dynamic decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          detail =
+              decoded['message']?.toString() ??
+              decoded['error']?.toString() ??
+              decoded['detail']?.toString();
+        } else {
+          detail = response.body.trim();
+        }
+      } catch (_) {
+        detail = response.body.trim();
+      }
+    }
+
+    if (response.statusCode == 401) {
+      return ChatException('Tu sesión expiró. Inicia sesión nuevamente.');
+    }
+    if (response.statusCode == 403) {
+      return ChatException(
+        detail?.isNotEmpty == true
+            ? detail!
+            : 'No tienes permiso para acceder a este chat.',
+      );
+    }
+    if (response.statusCode == 404) {
+      return ChatException(
+        detail?.isNotEmpty == true
+            ? detail!
+            : 'No se encontró la conversación solicitada.',
+      );
+    }
+
+    return ChatException(
+      detail?.isNotEmpty == true
+          ? detail!
+          : '$fallbackMessage (HTTP ${response.statusCode}).',
+    );
+  }
+
   // ============ REST ENDPOINTS (para sincronización con backend) ============
 
   /// Obtiene conversaciones del backend (mantiene sincronización)
@@ -60,9 +106,13 @@ class ChatService {
         final List<dynamic> data = jsonDecode(response.body);
         return data.map((json) => ConversationSummary.fromJson(json)).toList();
       } else {
-        throw ChatException('Failed to load conversations');
+        throw _buildChatException(
+          response,
+          'No se pudieron cargar las conversaciones',
+        );
       }
     } catch (e) {
+      if (e is ChatException) rethrow;
       throw ChatException('Error loading conversations: $e');
     }
   }
@@ -90,14 +140,13 @@ class ChatService {
         final data = jsonDecode(response.body);
         return ConversationSummary.fromJson(data);
       } else {
-        final String detail = response.body.trim();
-        throw ChatException(
-          detail.isEmpty
-              ? 'No se pudo iniciar la conversacion (HTTP ${response.statusCode}).'
-              : 'No se pudo iniciar la conversacion (HTTP ${response.statusCode}): $detail',
+        throw _buildChatException(
+          response,
+          'No se pudo iniciar la conversación',
         );
       }
     } catch (e) {
+      if (e is ChatException) rethrow;
       throw ChatException('Error starting conversation: $e');
     }
   }
@@ -119,7 +168,10 @@ class ChatService {
       );
 
       if (response.statusCode != 200) {
-        throw ChatException('Failed to load messages');
+        throw _buildChatException(
+          response,
+          'No se pudieron cargar los mensajes',
+        );
       }
 
       final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
@@ -134,6 +186,7 @@ class ChatService {
       cacheMessages(conversationId, messages);
       return messages;
     } catch (e) {
+      if (e is ChatException) rethrow;
       throw ChatException('Failed to load messages: $e');
     }
   }
@@ -162,7 +215,10 @@ class ChatService {
       );
 
       if (response.statusCode != 201 && response.statusCode != 200) {
-        throw ChatException('Failed to send message');
+        throw _buildChatException(
+          response,
+          'No se pudo enviar el mensaje',
+        );
       }
 
       final ChatMessageItem message = ChatMessageItem.fromJson(
@@ -183,6 +239,7 @@ class ChatService {
       upsertCachedMessage(normalizedMessage);
       return normalizedMessage;
     } catch (e) {
+      if (e is ChatException) rethrow;
       throw ChatException('Failed to send message: $e');
     }
   }

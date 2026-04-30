@@ -72,4 +72,10 @@ class UserProvider extends ChangeNotifier {
       _currentUser.userType == UserType.candidate
           ? _currentUser.location
           : _currentUser.website;
+
+  /// Actualiza el estado premium del usuario
+  void updateUserPremiumStatus(bool isPremium) {
+    _currentUser = _currentUser.copyWith(isPremium: isPremium);
+    notifyListeners();
+  }
 }

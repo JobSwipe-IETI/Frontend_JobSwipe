@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 
 import '../config/theme.dart';
 import '../controllers/user_provider.dart';
-import '../models/vacancy_model.dart';
 import '../services/secure_token_storage.dart';
 import '../services/vacancy_service.dart';
 
@@ -915,8 +914,8 @@ class _CreateVacancySectionState extends State<CreateVacancySection> {
       );
 
       if (isEditing) {
-        widget.onVacancySaved?.call();
         Navigator.pop(context, true);
+        widget.onVacancySaved?.call();
       } else {
         _resetForm();
         widget.onVacancySaved?.call();

@@ -29,6 +29,9 @@ class SwipeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final _BadgeStyle badgeStyle = _badgeStyle(vacancy.badge);
+    final String matchLabel = vacancy.matchPercentage != null
+        ? '${vacancy.matchPercentage!.toStringAsFixed(0)}%'
+        : 'Analizando';
 
     return Transform(
       alignment: Alignment.center,
@@ -119,7 +122,7 @@ class SwipeCard extends StatelessWidget {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      '${vacancy.matchPercentage.toStringAsFixed(0)}%',
+                                      matchLabel,
                                       style: TextStyle(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w800,

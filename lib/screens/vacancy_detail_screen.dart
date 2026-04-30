@@ -1,22 +1,18 @@
 import 'package:flutter/material.dart';
 import '../config/theme.dart';
+import '../models/vacancy_model.dart';
+import '../services/vacancy_service.dart';
 
 class VacancyDetailScreen extends StatefulWidget {
   final int vacancyId;
-  final String title;
-  final String company;
-  final String location;
-  final String salary;
-  final double matchPercentage;
+  final String jwt;
+  final VacancyModel? initialVacancy;
 
   const VacancyDetailScreen({
     super.key,
     required this.vacancyId,
-    required this.title,
-    required this.company,
-    required this.location,
-    required this.salary,
-    required this.matchPercentage,
+    required this.jwt,
+    this.initialVacancy,
   });
 
   @override
@@ -26,6 +22,158 @@ class VacancyDetailScreen extends StatefulWidget {
 class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
   bool isSaved = false;
   bool isLiked = false;
+  final VacancyService _vacancyService = VacancyService();
+  VacancyFormData? _vacancy;
+  bool _isLoading = true;
+  bool _isApplying = false;
+  bool _applied = false;
+
+  bool get _showAiActive =>
+      widget.initialVacancy?.logo == 'recommended';
+
+  double? get _displayMatchPercentage => widget.initialVacancy?.matchPercentage;
+
+  String get _displayMatchLabel {
+    final double? score = _displayMatchPercentage;
+    if (score != null) {
+      return '${score.toStringAsFixed(0)}%';
+    }
+    if (_showAiActive) {
+      return 'Analizando';
+    }
+    return '—';
+  }
+
+  double get _displayMatchProgress {
+    final double? score = _displayMatchPercentage;
+    if (score == null) {
+      return _showAiActive ? 0.18 : 0.0;
+    }
+    return (score / 100).clamp(0.0, 1.0);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVacancy();
+  }
+
+  String get _displayCompany =>
+      _vacancy?.sector ?? widget.initialVacancy?.company ?? 'Empresa';
+
+  String get _displayTitle =>
+      _vacancy?.title ?? widget.initialVacancy?.title ?? 'Cargando vacante...';
+
+  String get _displayLocation =>
+      _vacancy?.location ?? widget.initialVacancy?.location ?? '';
+
+  String get _displaySector => _vacancy?.sector ?? 'Otro';
+
+  String get _displayModality => _mapModality(_vacancy?.modality);
+
+  String get _displayEmploymentType =>
+      _mapEmploymentType(_vacancy?.employmentType);
+
+  String get _displayExperienceLevel =>
+      _mapExperienceLevel(_vacancy?.experienceLevel);
+
+  String get _displayDescription =>
+      _vacancy?.description ??
+      widget.initialVacancy?.description ??
+      'Estamos cargando más información sobre esta vacante.';
+
+  String get _displaySalary {
+    if (_vacancy != null && _vacancy!.minSalary > 0) {
+      return '\$${_vacancy!.minSalary.toStringAsFixed(0)} - \$${_vacancy!.maxSalary.toStringAsFixed(0)}';
+    }
+    return widget.initialVacancy?.salary ?? 'Salario no especificado';
+  }
+
+  bool get _hasInitialVacancy => widget.initialVacancy != null;
+
+  List<String> get _displayTechnologies => _vacancy?.technologies ?? const [];
+
+  List<String> get _displaySoftSkills => _vacancy?.softSkills ?? const [];
+
+  List<String> get _displayResponsibilities =>
+      _vacancy?.responsibilities ?? const [];
+
+  List<String> get _displayTechnicalRequirements =>
+      _vacancy?.technicalRequirements ?? const [];
+
+  List<String> get _displayBenefits => _vacancy?.benefits ?? const [];
+
+  String _mapModality(String? value) {
+    switch (value) {
+      case 'REMOTE':
+        return 'Remoto';
+      case 'HYBRID':
+        return 'Híbrido';
+      case 'ON_SITE':
+        return 'Presencial';
+      default:
+        return 'Modalidad por definir';
+    }
+  }
+
+  String _mapEmploymentType(String? value) {
+    switch (value) {
+      case 'FULL_TIME':
+        return 'Tiempo completo';
+      case 'PART_TIME':
+        return 'Medio tiempo';
+      case 'FREELANCE':
+        return 'Freelance';
+      case 'PROJECT_BASED':
+        return 'Por proyecto';
+      case 'IMMEDIATE':
+        return 'Inmediata';
+      case 'IN_15_DAYS':
+        return 'En 15 días';
+      case 'IN_30_DAYS':
+        return 'En 30 días';
+      default:
+        return 'Tipo por definir';
+    }
+  }
+
+  String _mapExperienceLevel(String? value) {
+    switch (value) {
+      case 'JUNIOR':
+        return 'Junior';
+      case 'SEMI_SENIOR':
+        return 'Semi-Senior';
+      case 'SENIOR':
+        return 'Senior';
+      default:
+        return 'Experiencia por definir';
+    }
+  }
+
+  Future<void> _loadVacancy() async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      final data = await _vacancyService.getVacancyById(
+        jwt: widget.jwt,
+        vacancyId: widget.vacancyId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _vacancy = data;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error cargando vacante: $e')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,10 +195,18 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
           child: Stack(
             children: [
               SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (_isLoading && _hasInitialVacancy) ...[
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: const LinearProgressIndicator(minHeight: 4),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     // Header Section
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -76,34 +232,35 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                             ),
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: JobSwipeTheme.primaryGradient,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            spacing: 6,
-                            children: [
-                              const Icon(
-                                Icons.bolt_rounded,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                              const Text(
-                                'IA activa',
-                                style: TextStyle(
+                        if (_showAiActive)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: JobSwipeTheme.primaryGradient,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              spacing: 6,
+                              children: [
+                                const Icon(
+                                  Icons.bolt_rounded,
                                   color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
+                                  size: 16,
                                 ),
-                              ),
-                            ],
+                                const Text(
+                                  'IA activa',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 24),
@@ -163,7 +320,7 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                                         ),
                                         const SizedBox(height: 8),
                                         Text(
-                                          widget.company,
+                                          _displayCompany,
                                           style: const TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w700,
@@ -190,7 +347,7 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
                                         Text(
-                                          '${widget.matchPercentage.toStringAsFixed(0)}%',
+                                          _displayMatchLabel,
                                           style: const TextStyle(
                                             fontSize: 20,
                                             fontWeight: FontWeight.w900,
@@ -223,7 +380,7 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(3),
                                 child: FractionallySizedBox(
-                                  widthFactor: widget.matchPercentage / 100,
+                                  widthFactor: _displayMatchProgress,
                                   child: Container(
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(
@@ -245,7 +402,7 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                                 children: [
                                   // Title
                                   Text(
-                                    widget.title,
+                                    _displayTitle,
                                     style: const TextStyle(
                                       fontSize: 22,
                                       fontWeight: FontWeight.w900,
@@ -255,7 +412,7 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    widget.company,
+                                    _displayCompany,
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
@@ -269,11 +426,15 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                                     children: [
                                       _buildQuickTag(
                                         icon: Icons.location_on_rounded,
-                                        label: widget.location,
+                                        label: _displayLocation,
                                       ),
                                       _buildQuickTag(
                                         icon: Icons.home_work_rounded,
-                                        label: '100% Remoto',
+                                        label: _displayModality,
+                                      ),
+                                      _buildQuickTag(
+                                        icon: Icons.category_outlined,
+                                        label: _displaySector,
                                       ),
                                     ],
                                   ),
@@ -289,7 +450,7 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Text(
-                                      widget.salary,
+                                      _displaySalary,
                                       style: const TextStyle(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w800,
@@ -300,7 +461,7 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                                   const SizedBox(height: 20),
                                   // Description Preview
                                   Text(
-                                    'Únete al equipo de ingeniería de Google para construir interfaces de próxima generación usando React y TypeScript. Trabajarás en productos que impactan a millones de usuarios.',
+                                    _displayDescription,
                                     style: TextStyle(
                                       fontSize: 13,
                                       color: Colors.grey.shade700,
@@ -308,33 +469,7 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 20),
-                                  // Key Requirements
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'REQUISITOS CLAVE',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w900,
-                                          color: Colors.grey.shade600,
-                                          letterSpacing: 0.5,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 10),
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        children: [
-                                          _buildRequirementTag('React'),
-                                          _buildRequirementTag('TypeScript'),
-                                          _buildRequirementTag('3+ años'),
-                                          _buildRequirementTag('GraphQL'),
-                                          _buildRequirementTag('Node.js'),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
+                                  _buildMetadataBlock(),
                                 ],
                               ),
                             ),
@@ -346,122 +481,6 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                     // Additional Details Section
                     _buildDetailSection(),
                   ],
-                ),
-              ),
-              // Bottom Action Buttons
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border(
-                      top: BorderSide(color: Colors.grey.shade200),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 12,
-                        offset: const Offset(0, -4),
-                      ),
-                    ],
-                  ),
-                  padding: EdgeInsets.fromLTRB(
-                    20,
-                    16,
-                    20,
-                    16 + MediaQuery.of(context).padding.bottom,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    spacing: 24,
-                    children: [
-                      // Discard Button
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          width: 70,
-                          height: 70,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: const Color(0xFFEF4444),
-                              width: 3,
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.close_rounded,
-                            color: const Color(0xFFEF4444),
-                            size: 32,
-                          ),
-                        ),
-                      ),
-                      // Like Button
-                      GestureDetector(
-                        onTap: () {
-                          setState(() => isLiked = !isLiked);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                isLiked ? '¡Te encanta esta oferta!' : 'Quitado de favoritos',
-                              ),
-                              backgroundColor: isLiked
-                                  ? const Color(0xFF10B981)
-                                  : Colors.grey.shade600,
-                              behavior: SnackBarBehavior.floating,
-                              margin: const EdgeInsets.all(16),
-                              duration: const Duration(seconds: 1),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          width: 70,
-                          height: 70,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isLiked
-                                ? const Color(0xFF10B981)
-                                : const Color(0xFF10B981).withOpacity(0.1),
-                          ),
-                          child: Icon(
-                            isLiked ? Icons.favorite_rounded : Icons.favorite_outline_rounded,
-                            color: Colors.white,
-                            size: 32,
-                          ),
-                        ),
-                      ),
-                      // Info Button
-                      GestureDetector(
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Más información disponible'),
-                              behavior: SnackBarBehavior.floating,
-                              margin: EdgeInsets.all(16),
-                              duration: Duration(milliseconds: 800),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          width: 70,
-                          height: 70,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: const Color(0xFF06B6D4),
-                              width: 3,
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.info_outline_rounded,
-                            color: const Color(0xFF06B6D4),
-                            size: 32,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
             ],
@@ -541,10 +560,10 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionTitle('Descripción Completa'),
+          _buildSectionTitle('Descripción completa'),
           const SizedBox(height: 12),
           Text(
-            'En esta posición, serás responsable de desarrollar y mantener aplicaciones web escalables utilizando tecnologías modernas. Trabajarás en un equipo colaborativo enfocado en la innovación y la excelencia técnica.\n\nBuscamos un profesional apasionado por la programación, con atención al detalle y capacidad de aprender tecnologías nuevas rápidamente. Serás parte de un equipo dinámico que valora la innovación.',
+            _displayDescription,
             style: TextStyle(
               fontSize: 13,
               color: Colors.grey.shade700,
@@ -553,15 +572,105 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
             ),
           ),
           const SizedBox(height: 28),
-          _buildSectionTitle('Beneficios'),
-          const SizedBox(height: 12),
-          _buildBenefitItem('Salario competitivo acorde a experiencia'),
-          _buildBenefitItem('Seguro de salud integral'),
-          _buildBenefitItem('Home office 100% con flexibilidad'),
-          _buildBenefitItem('Capacitación continua'),
-          _buildBenefitItem('Bono anual por desempeño'),
+          _buildInfoListSection(
+            title: 'Tecnologías requeridas',
+            items: _displayTechnologies,
+            emptyText: 'Esta vacante no tiene tecnologías registradas.',
+          ),
+          const SizedBox(height: 24),
+          _buildInfoListSection(
+            title: 'Habilidades blandas',
+            items: _displaySoftSkills,
+            emptyText: 'Esta vacante no tiene habilidades blandas registradas.',
+          ),
+          const SizedBox(height: 24),
+          _buildInfoListSection(
+            title: 'Responsabilidades',
+            items: _displayResponsibilities,
+            emptyText: 'Esta vacante no tiene responsabilidades registradas.',
+            useBenefitStyle: true,
+          ),
+          const SizedBox(height: 24),
+          _buildInfoListSection(
+            title: 'Requisitos técnicos',
+            items: _displayTechnicalRequirements,
+            emptyText: 'Esta vacante no tiene requisitos técnicos registrados.',
+            useBenefitStyle: true,
+          ),
+          const SizedBox(height: 24),
+          _buildInfoListSection(
+            title: 'Beneficios',
+            items: _displayBenefits,
+            emptyText: 'Esta vacante no tiene beneficios registrados.',
+            useBenefitStyle: true,
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMetadataBlock() {
+    final items = <String>[
+      _displayEmploymentType,
+      _displayExperienceLevel,
+      _displaySector,
+    ].where((item) => item.trim().isNotEmpty).toList(growable: false);
+
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'DETALLES DE LA VACANTE',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+            color: Colors.grey.shade600,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: items.map(_buildRequirementTag).toList(growable: false),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoListSection({
+    required String title,
+    required List<String> items,
+    required String emptyText,
+    bool useBenefitStyle = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(title),
+        const SizedBox(height: 12),
+        if (items.isEmpty)
+          Text(
+            emptyText,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey.shade600,
+              height: 1.5,
+            ),
+          )
+        else if (useBenefitStyle)
+          ...items.map(_buildBenefitItem)
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: items.map(_buildRequirementTag).toList(growable: false),
+          ),
+      ],
     );
   }
 

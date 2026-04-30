@@ -214,6 +214,33 @@ class AuthService {
     return _extractStringClaim(token, 'avatarUrl');
   }
 
+  static bool extractIsPremiumFromJwt(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) {
+        debugPrint('❌ JWT format invalid: expected 3 parts, got ${parts.length}');
+        return false;
+      }
+
+      String payload = parts[1];
+      final int padLength = 4 - (payload.length % 4);
+      if (padLength != 4) {
+        payload += '=' * padLength;
+      }
+
+      final decodedBytes = base64Url.decode(payload);
+      final decodedString = utf8.decode(decodedBytes);
+      final json = jsonDecode(decodedString) as Map<String, dynamic>;
+      final isPremium = json['isPremium'] == true;
+      
+      debugPrint('✅ JWT isPremium extracted: $isPremium (from claim: ${json['isPremium']})');
+      return isPremium;
+    } catch (e) {
+      debugPrint('❌ Error extracting isPremium: $e');
+      return false;
+    }
+  }
+
   static String? _extractStringClaim(String token, String claimKey) {
     try {
       final parts = token.split('.');
